@@ -12,6 +12,7 @@ import (
 	"github.com/status-im/status-go/appdatabase"
 	"github.com/status-im/status-go/multiaccounts/settings"
 	"github.com/status-im/status-go/params"
+	"github.com/status-im/status-go/services/wallet/common"
 	"github.com/status-im/status-go/services/wallet/token/token-lists/fetcher"
 	"github.com/status-im/status-go/signal"
 	"github.com/status-im/status-go/t/helpers"
@@ -118,10 +119,15 @@ func TestTokensLists(t *testing.T) {
 
 	// immediately after starting the server check if the initial token lists are loaded
 	allTokensLists := tokensLists.GetTokensLists()
-	require.Len(t, allTokensLists, 3)
+	require.Len(t, allTokensLists, 2)
 	allTokens = tokensLists.GetUniqueTokens()
 	allTokensCount := len(allTokens)
 	require.True(t, allTokensCount > 0)
+
+	statusTokensList := tokensLists.GetTokensList("status")
+	require.NotNil(t, statusTokensList)
+	require.True(t, len(statusTokensList.Tokens) > 0)
+	countOfStatusTokens := len(statusTokensList.Tokens)
 
 	// wait for the auto-refresh to try to fetch the token lists, while auto-refresh is disabled
 	select {
@@ -165,28 +171,49 @@ func TestTokensLists(t *testing.T) {
 		break
 	}
 
-	tokensList := tokensLists.GetTokensList("uniswap")
+	tokensList := tokensLists.GetTokensList("status")
+	require.NotNil(t, tokensList)
+	require.Len(t, tokensList.Tokens, countOfStatusTokens)
+
+	tokensList = tokensLists.GetTokensList("uniswap")
 	require.NotNil(t, tokensList)
 	require.Equal(t, fetcher.UniswapTokensListVersion, tokensList.GetVersion())
+	require.Len(t, tokensList.Tokens, 0) // cause uniswap token list doesn't have id parameter for the tokens
 
 	tokensList = tokensLists.GetTokensList("aave")
 	require.NotNil(t, tokensList)
 	require.Equal(t, fetcher.AaveTokensListVersion, tokensList.GetVersion())
+	require.Len(t, tokensList.Tokens, 0) // cause aave token list doesn't have id parameter for the tokens
+
+	tokensList = tokensLists.GetTokensList("coingecko")
+	require.NotNil(t, tokensList)
+	require.Len(t, tokensList.Tokens, 7)
 
 	// the token lists should be updated
 	allTokens = tokensLists.GetUniqueTokens()
 	require.True(t, allTokensCount != len(allTokens))
+	require.Equal(t, countOfStatusTokens+7, len(allTokens))
 
 	lastUpdate, err = tokensLists.LastTokensUpdate()
 	require.NoError(t, err)
 	require.False(t, lastUpdate.IsZero())
 
-	// the list should contain "special" testing purpose uniswap and aave tokens
+	// the list should contain usdc for ethereum chain which comes from coingecko token list and usdc for ethereum sepolia chain which comes from status token list
+	foundUsdcOnEthereum := false
+	foundUsdcOnEthereumSepolia := false
+	// the list should not contain "special" testing purpose uniswap and aave tokens cause those lists don't have id parameter for the tokens
 	foundSpecialUniswapTokens := false
 	foundSpecialAaveTokens := false
 	for _, token := range allTokens {
-		if foundSpecialUniswapTokens && foundSpecialAaveTokens {
-			break
+		if token.TokenGroupKey() == fetcher.UsdcID {
+			if token.ChainID == common.EthereumMainnet {
+				foundUsdcOnEthereum = true
+				continue
+			}
+			if token.ChainID == common.EthereumSepolia {
+				foundUsdcOnEthereumSepolia = true
+				continue
+			}
 		}
 		if token.Symbol == fetcher.UniswapSpecialTokenSymbol && token.Name == fetcher.UniswapSpecialTokenName {
 			foundSpecialUniswapTokens = true
@@ -197,6 +224,9 @@ func TestTokensLists(t *testing.T) {
 			continue
 		}
 	}
-	require.True(t, foundSpecialUniswapTokens)
-	require.True(t, foundSpecialAaveTokens)
+
+	require.True(t, foundUsdcOnEthereum)
+	require.True(t, foundUsdcOnEthereumSepolia)
+	require.False(t, foundSpecialUniswapTokens)
+	require.False(t, foundSpecialAaveTokens)
 }

@@ -18,8 +18,7 @@ func main() {
 	fmt.Println("Analyzing token lists")
 	fetchedTokensLists := []fetcher.FetchedTokenList{
 		defaulttokenlists.StatusTokenList,
-		defaulttokenlists.AaveTokenList,
-		defaulttokenlists.UniswapTokenList,
+		defaulttokenlists.CoingeckoTokenList,
 	}
 
 	fmt.Println("Analyzing token lists")

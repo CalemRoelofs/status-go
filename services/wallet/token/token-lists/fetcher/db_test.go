@@ -16,23 +16,23 @@ func TestDbActions(t *testing.T) {
 	tokenListsFetched := []FetchedTokenList{
 		{
 			TokenList: TokenList{
-				ID:        defaultTokensList[0].ID,
-				SourceURL: defaultTokensList[0].SourceURL,
-				Schema:    defaultTokensList[0].Schema,
+				ID:        "id-1",
+				SourceURL: "source-1",
+				Schema:    "schema-1",
 			},
 			Etag:     "etag1",
 			Fetched:  time.Now().Add(-48 * time.Hour),
-			JsonData: uniswapTokenListJsonResponse,
+			JsonData: "json-data-1",
 		},
 		{
 			TokenList: TokenList{
-				ID:        defaultTokensList[1].ID,
-				SourceURL: defaultTokensList[1].SourceURL,
-				Schema:    defaultTokensList[1].Schema,
+				ID:        "id-2",
+				SourceURL: "source-2",
+				Schema:    "schema-2",
 			},
 			Etag:     "etag2",
 			Fetched:  time.Now().Add(-48 * time.Hour),
-			JsonData: aaveTokenListJsonResponse,
+			JsonData: "json-data-2",
 		},
 	}
 
@@ -48,20 +48,20 @@ func TestDbActions(t *testing.T) {
 	dbTokenLists, err := tokenListsFetcher.GetAllTokenLists()
 	require.NoError(t, err)
 	require.Len(t, dbTokenLists, len(tokenListsFetched))
-	uniswapIndex := 0
-	if dbTokenLists[0].ID == "aave" {
-		uniswapIndex = 1
+	id1Index := 0
+	if dbTokenLists[0].ID == "id-2" {
+		id1Index = 1
 	}
 
-	require.Equal(t, tokenListsFetched[0].ID, dbTokenLists[uniswapIndex].ID)
-	require.Equal(t, tokenListsFetched[0].Etag, dbTokenLists[uniswapIndex].Etag)
-	require.Equal(t, tokenListsFetched[0].JsonData, dbTokenLists[uniswapIndex].JsonData)
-	require.True(t, dbTokenLists[uniswapIndex].Fetched.Compare(tokenListsFetched[0].Fetched) == 1)
+	require.Equal(t, tokenListsFetched[0].ID, dbTokenLists[id1Index].ID)
+	require.Equal(t, tokenListsFetched[0].Etag, dbTokenLists[id1Index].Etag)
+	require.Equal(t, tokenListsFetched[0].JsonData, dbTokenLists[id1Index].JsonData)
+	require.True(t, dbTokenLists[id1Index].Fetched.Compare(tokenListsFetched[0].Fetched) == 1)
 
-	require.Equal(t, tokenListsFetched[1].ID, dbTokenLists[1-uniswapIndex].ID)
-	require.Equal(t, tokenListsFetched[1].Etag, dbTokenLists[1-uniswapIndex].Etag)
-	require.Equal(t, tokenListsFetched[1].JsonData, dbTokenLists[1-uniswapIndex].JsonData)
-	require.True(t, dbTokenLists[1-uniswapIndex].Fetched.Compare(tokenListsFetched[1].Fetched) == 1)
+	require.Equal(t, tokenListsFetched[1].ID, dbTokenLists[1-id1Index].ID)
+	require.Equal(t, tokenListsFetched[1].Etag, dbTokenLists[1-id1Index].Etag)
+	require.Equal(t, tokenListsFetched[1].JsonData, dbTokenLists[1-id1Index].JsonData)
+	require.True(t, dbTokenLists[1-id1Index].Fetched.Compare(tokenListsFetched[1].Fetched) == 1)
 
 	etag, err = tokenListsFetcher.GetEtagForTokenList(tokenListsFetched[0].ID)
 	require.NoError(t, err)

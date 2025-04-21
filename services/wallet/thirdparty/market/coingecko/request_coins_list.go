@@ -17,10 +17,11 @@ type GeckoToken struct {
 }
 
 type Platforms struct { // When we add a new chain we should update it here
-	Ethereum string `json:"ethereum"`
-	Optimism string `json:"optimistic-ethereum"`
-	Arbitrum string `json:"arbitrum-one"`
-	Base     string `json:"base"`
+	Ethereum          string `json:"ethereum"`
+	Optimism          string `json:"optimistic-ethereum"`
+	Arbitrum          string `json:"arbitrum-one"`
+	Base              string `json:"base"`
+	BinanceSmartChain string `json:"binance-smart-chain"`
 }
 
 func (c *Client) FetchTokens(ctx context.Context) ([]GeckoToken, error) {
