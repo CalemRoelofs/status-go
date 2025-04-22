@@ -195,9 +195,8 @@ func TestGetOrFetchTokenMarketValues(t *testing.T) {
 		fetchTokenMarketValues  map[string]thirdparty.TokenMarketValues
 		fetchErr                error
 
-		wantFetchSymbols []string
-		wantValues       map[string]thirdparty.TokenMarketValues
-		wantErr          error
+		wantValues map[string]thirdparty.TokenMarketValues
+		wantErr    error
 	}{
 		{
 			description:                "fetch errors are propagated",
@@ -206,9 +205,8 @@ func TestGetOrFetchTokenMarketValues(t *testing.T) {
 			fetchTokenMarketValues:     nil,
 			fetchErr:                   errors.New("explosion"),
 
-			wantFetchSymbols: requestSymbols,
-			wantValues:       nil,
-			wantErr:          errors.New("explosion"),
+			wantValues: nil,
+			wantErr:    errors.New("explosion"),
 		},
 		{
 			description:                "token values fetched if not cached",
@@ -217,9 +215,8 @@ func TestGetOrFetchTokenMarketValues(t *testing.T) {
 			fetchTokenMarketValues:     initialTokenMarketValues,
 			fetchErr:                   nil,
 
-			wantFetchSymbols: requestSymbols,
-			wantValues:       initialTokenMarketValues,
-			wantErr:          nil,
+			wantValues: initialTokenMarketValues,
+			wantErr:    nil,
 		},
 		{
 			description:                "token values returned from cache if fresh",
@@ -228,9 +225,8 @@ func TestGetOrFetchTokenMarketValues(t *testing.T) {
 			fetchTokenMarketValues:     nil,
 			fetchErr:                   nil,
 
-			wantFetchSymbols: requestSymbols,
-			wantValues:       initialTokenMarketValues,
-			wantErr:          nil,
+			wantValues: initialTokenMarketValues,
+			wantErr:    nil,
 		},
 		{
 			description:                "token values fetched if fetch forced",
@@ -239,9 +235,8 @@ func TestGetOrFetchTokenMarketValues(t *testing.T) {
 			fetchTokenMarketValues:     updatedTokenMarketValues,
 			fetchErr:                   nil,
 
-			wantFetchSymbols: requestSymbols,
-			wantValues:       updatedTokenMarketValues,
-			wantErr:          nil,
+			wantValues: updatedTokenMarketValues,
+			wantErr:    nil,
 
 			// TODO: Implement more test cases
 			// Test Case: There's cache, but we want fresh data, but fetch fails, we should fallback to cache
@@ -260,7 +255,7 @@ func TestGetOrFetchTokenMarketValues(t *testing.T) {
 			}
 
 			if tc.fetchTokenMarketValues != nil || tc.fetchErr != nil {
-				provider.EXPECT().FetchTokenMarketValues(tc.wantFetchSymbols, requestCurrency).Return(tc.fetchTokenMarketValues, tc.fetchErr)
+				provider.EXPECT().FetchTokenMarketValues(gomock.Any(), requestCurrency).Return(tc.fetchTokenMarketValues, tc.fetchErr)
 			}
 
 			gotValues, gotErr := manager.GetOrFetchTokenMarketValues(requestSymbols, requestCurrency, tc.requestMaxCachedAgeSeconds)

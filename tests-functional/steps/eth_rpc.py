@@ -4,7 +4,7 @@ from collections import namedtuple
 import pytest
 from steps.status_backend import StatusBackendSteps
 from clients.signals import SignalType
-from resources.constants import user_1, user_2
+from resources.constants import user_1, user_2, ANVIL_NETWORK_ID
 from utils import wallet_utils
 from uuid import uuid4
 
@@ -33,8 +33,8 @@ class EthRpcSteps(StatusBackendSteps):
             "tokenID": "ETH",
             "tokenIDIsOwnerToken": False,
             "toTokenID": "",
-            "disabledFromChainIDs": [],
-            "disabledToChainIDs": [],
+            "FromChainID": ANVIL_NETWORK_ID,
+            "ToChainID": ANVIL_NETWORK_ID,
             "gasFeeMode": 1,
             # params for building tx from route
             "slippagePercentage": 0,

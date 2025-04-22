@@ -2,8 +2,6 @@ package requests
 
 import (
 	"math/big"
-	"reflect"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -41,19 +39,20 @@ var (
 )
 
 type RouteInputParams struct {
-	Uuid                 string            `json:"uuid"`
-	SendType             sendtype.SendType `json:"sendType" validate:"required"`
-	AddrFrom             common.Address    `json:"addrFrom" validate:"required"`
-	AddrTo               common.Address    `json:"addrTo" validate:"required"`
-	AmountIn             *hexutil.Big      `json:"amountIn" validate:"required"`
-	AmountOut            *hexutil.Big      `json:"amountOut"`
-	TokenID              string            `json:"tokenID" validate:"required"`
-	TokenIDIsOwnerToken  bool              `json:"tokenIDIsOwnerToken"`
-	ToTokenID            string            `json:"toTokenID"`
-	DisabledFromChainIDs []uint64          `json:"disabledFromChainIDs"`
-	DisabledToChainIDs   []uint64          `json:"disabledToChainIDs"`
-	GasFeeMode           fees.GasFeeMode   `json:"gasFeeMode" validate:"required"`
-	TestnetMode          bool
+	Uuid                string            `json:"uuid"`
+	SendType            sendtype.SendType `json:"sendType" validate:"required"`
+	AddrFrom            common.Address    `json:"addrFrom" validate:"required"`
+	AddrTo              common.Address    `json:"addrTo" validate:"required"`
+	AmountIn            *hexutil.Big      `json:"amountIn" validate:"required"`
+	AmountOut           *hexutil.Big      `json:"amountOut"`
+	TokenID             string            `json:"tokenID" validate:"required"`
+	TokenIDIsOwnerToken bool              `json:"tokenIDIsOwnerToken"`
+	ToTokenID           string            `json:"toTokenID"`
+	FromChainID         uint64            `json:"fromChainId"`
+	ToChainID           uint64            `json:"toChainId"`
+	FromAmount          string            `json:"fromAmount"`
+	GasFeeMode          fees.GasFeeMode   `json:"gasFeeMode" validate:"required"`
+	TestnetMode         bool
 
 	// For send types like EnsRegister, EnsRelease, EnsSetPubKey, StickersBuy
 	Username  string       `json:"username"`
@@ -89,22 +88,6 @@ type Estimation struct {
 	Err   error
 }
 
-func slicesEqual(a, b []uint64) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	aCopy := make([]uint64, len(a))
-	bCopy := make([]uint64, len(b))
-	copy(aCopy, a)
-	copy(bCopy, b)
-
-	sort.Slice(aCopy, func(i, j int) bool { return aCopy[i] < aCopy[j] })
-	sort.Slice(bCopy, func(i, j int) bool { return bCopy[i] < bCopy[j] })
-
-	return reflect.DeepEqual(aCopy, bCopy)
-}
-
 func (i *RouteInputParams) UseCommunityTransferDetails() bool {
 	if !i.SendType.IsCommunityRelatedTransfer() || i.CommunityRouteInputParams == nil {
 		return false
@@ -113,6 +96,15 @@ func (i *RouteInputParams) UseCommunityTransferDetails() bool {
 }
 
 func (i *RouteInputParams) Validate() error {
+	// Since we're in the single chain environment, fromChainID and toChainID are required
+	if i.FromChainID == 0 {
+		return ErrNoFromChainProvided
+	}
+
+	if i.ToChainID == 0 {
+		return ErrNoToChainProvided
+	}
+
 	if i.SendType == sendtype.ENSRegister {
 		if i.Username == "" || i.PublicKey == "" {
 			return ErrENSRegisterRequiresUsernameAndPubKey
@@ -176,13 +168,7 @@ func (i *RouteInputParams) Validate() error {
 	}
 
 	if i.SendType.IsCommunityRelatedTransfer() {
-		if i.DisabledFromChainIDs == nil || len(i.DisabledFromChainIDs) == 0 {
-			return ErrNoFromChainProvided
-		}
-		if i.DisabledToChainIDs == nil || len(i.DisabledToChainIDs) == 0 {
-			return ErrNoToChainProvided
-		}
-		if !slicesEqual(i.DisabledFromChainIDs, i.DisabledToChainIDs) {
+		if i.FromChainID != i.ToChainID {
 			return ErrFromAndToChainMustBeTheSame
 		}
 

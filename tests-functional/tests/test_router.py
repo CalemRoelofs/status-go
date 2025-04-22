@@ -36,8 +36,8 @@ class TestRouter(StatusBackendSteps):
             "tokenID": "ETH",
             "tokenIDIsOwnerToken": False,
             "toTokenID": "",
-            "disabledFromChainIDs": [1, 10, 42161],
-            "disabledToChainIDs": [1, 10, 42161],
+            "FromChainID": constants.ANVIL_NETWORK_ID,
+            "ToChainID": constants.ANVIL_NETWORK_ID,
             "gasFeeMode": 1,
         }
 
@@ -64,8 +64,8 @@ class TestRouter(StatusBackendSteps):
             "tokenID": "ETH",
             "tokenIDIsOwnerToken": False,
             "toTokenID": "",
-            "disabledFromChainIDs": [1, 10, 42161],
-            "disabledToChainIDs": [1, 10, 42161],
+            "FromChainID": constants.ANVIL_NETWORK_ID,
+            "ToChainID": constants.ANVIL_NETWORK_ID,
             "gasFeeMode": gas_fee_mode,
         }
 
@@ -130,8 +130,8 @@ class TestRouter(StatusBackendSteps):
             "tokenID": "ETH",
             "tokenIDIsOwnerToken": False,
             "toTokenID": "",
-            "disabledFromChainIDs": [1, 10, 42161],
-            "disabledToChainIDs": [1, 10, 42161],
+            "FromChainID": constants.ANVIL_NETWORK_ID,
+            "ToChainID": constants.ANVIL_NETWORK_ID,
             "gasFeeMode": gas_fee_mode,
         }
 

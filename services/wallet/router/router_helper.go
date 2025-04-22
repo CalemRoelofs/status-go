@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math/big"
-	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum"
@@ -391,19 +390,11 @@ func findToken(sendType sendtype.SendType, tokenManager *token.Manager, collecti
 }
 
 func fetchPrices(sendType sendtype.SendType, marketManager *market.Manager, tokenIDs []string) (map[string]float64, error) {
-	nonUniqueSymbols := append(tokenIDs, "ETH", "BNB")
-	// remove duplicate enteries
-	slices.Sort(nonUniqueSymbols)
-	symbols := slices.Compact(nonUniqueSymbols)
-	if sendType.IsCollectiblesTransfer() {
-		symbols = []string{"ETH", "BNB"}
-	}
-
-	pricesMap, err := marketManager.GetOrFetchPrices(symbols, []string{"USD"}, market.MaxAgeInSecondsForFresh)
-
+	pricesMap, err := marketManager.GetOrFetchPrices(tokenIDs, []string{"USD"}, market.MaxAgeInSecondsForFresh)
 	if err != nil {
 		return nil, err
 	}
+
 	prices := make(map[string]float64, 0)
 	for symbol, pricePerCurrency := range pricesMap {
 		prices[symbol] = pricePerCurrency["USD"].Price

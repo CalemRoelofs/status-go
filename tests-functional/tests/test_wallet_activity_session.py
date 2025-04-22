@@ -4,7 +4,7 @@ from utils import wallet_utils
 import uuid as uuid_lib
 import pytest
 
-from resources.constants import user_1, user_2
+from resources.constants import user_1, user_2, ANVIL_NETWORK_ID
 from steps.wallet import WalletSteps
 from clients.signals import SignalType
 
@@ -50,8 +50,8 @@ class TestWalletActivitySession(WalletSteps):
             "tokenID": "ETH",
             "tokenIDIsOwnerToken": False,
             "toTokenID": "",
-            "disabledFromChainIDs": [10, 42161],
-            "disabledToChainIDs": [10, 42161],
+            "FromChainID": ANVIL_NETWORK_ID,
+            "ToChainID": ANVIL_NETWORK_ID,
             "gasFeeMode": 1,
             # params for building tx from route
             "slippagePercentage": 0,
