@@ -1,5 +1,5 @@
 .PHONY: statusgo all test clean help
-.PHONY: build-libwaku test-libwaku clean-libwaku rebuild-libwaku
+.PHONY: build-libwaku test-libwaku clean-libwaku rebuild-libwaku build-libsds
 
 # Clear any GOROOT set outside of the Nix shell
 export GOROOT=
@@ -193,6 +193,13 @@ statusgo-library: $(LIBWAKU) ##@cross-compile Build status-go as static library 
 	@ls -la build/bin/libstatus.*
 
 build-libwaku: $(LIBWAKU)
+
+LIBSDS_DEP_PATH=$(shell go list -m -f '{{.Dir}}' github.com/waku-org/sds-go-bindings)
+build-libsds:
+	cd $(LIBSDS_DEP_PATH) && \
+	sudo mkdir -p third_party && \
+	sudo chown $(USER) third_party && \
+	make -C sds
 
 statusgo-shared-library: generate
 statusgo-shared-library: $(LIBWAKU) ##@cross-compile Build status-go as shared library for current platform
