@@ -1738,7 +1738,7 @@ func (s *ManagerSuite) TestCommunityQueue() {
 	payload, err := community.MarshaledDescription()
 	s.Require().NoError(err)
 
-	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, owner)
+	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, owner, nil)
 	s.Require().NoError(err)
 
 	// Create a signer, that is not the owner
@@ -1834,7 +1834,7 @@ func (s *ManagerSuite) TestCommunityQueueMultipleDifferentSigners() {
 	payload, err := community.MarshaledDescription()
 	s.Require().NoError(err)
 
-	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, oldOwner)
+	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, oldOwner, nil)
 	s.Require().NoError(err)
 
 	subscription := m.Subscribe()
@@ -1854,7 +1854,7 @@ func (s *ManagerSuite) TestCommunityQueueMultipleDifferentSigners() {
 	payload, err = community.MarshaledDescription()
 	s.Require().NoError(err)
 
-	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, newOwner)
+	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, newOwner, nil)
 	s.Require().NoError(err)
 
 	response, err = m.HandleCommunityDescriptionMessage(&newOwner.PublicKey, description, payload, nil, nil)
@@ -1964,7 +1964,7 @@ func (s *ManagerSuite) TestCommunityQueueMultipleDifferentSignersIgnoreIfNotRetu
 	payload, err := community.MarshaledDescription()
 	s.Require().NoError(err)
 
-	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, oldOwner)
+	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, oldOwner, nil)
 	s.Require().NoError(err)
 
 	subscription := m.Subscribe()
@@ -1982,7 +1982,7 @@ func (s *ManagerSuite) TestCommunityQueueMultipleDifferentSignersIgnoreIfNotRetu
 	payload, err = community.MarshaledDescription()
 	s.Require().NoError(err)
 
-	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, newOwner)
+	payload, err = v1.WrapMessageV1(payload, protobuf.ApplicationMetadataMessage_COMMUNITY_DESCRIPTION, newOwner, nil)
 	s.Require().NoError(err)
 
 	response, err = m.HandleCommunityDescriptionMessage(&newOwner.PublicKey, description, payload, nil, nil)
