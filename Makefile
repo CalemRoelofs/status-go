@@ -162,6 +162,7 @@ $(LIBSDS):
 	@echo "Building libsds"
 	$(MAKE) -C $(CURDIR)/vendor/github.com/waku-org/sds-go-bindings/sds SHELL=/bin/bash
 
+statusgo: $(LIBSDS)
 
 status-backend: ##@build Build status-backend to run status-go as HTTP server
 status-backend: build/bin/status-backend
@@ -205,7 +206,7 @@ build-libwaku: $(LIBWAKU)
 build-libsds: $(LIBSDS)
 
 statusgo-shared-library: generate
-statusgo-shared-library: $(LIBWAKU) ##@cross-compile Build status-go as shared library for current platform
+statusgo-shared-library: $(LIBWAKU) $(LIBSDS) ##@cross-compile Build status-go as shared library for current platform
 	## cmd/library/README.md explains the magic incantation behind this
 	mkdir -p build/bin/statusgo-lib
 	go run cmd/library/*.go > build/bin/statusgo-lib/main.go
