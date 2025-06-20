@@ -34,6 +34,17 @@ func (s *MessageSender) segmentMessage(newMessage *wakutypes.NewMessage) ([]*wak
 	// room for segment message metadata.
 	newMessages, err := segmentMessage(newMessage, int(s.transport.MaxMessageSize()/4*3))
 	s.logger.Debug("message segmented", zap.Int("segments", len(newMessages)))
+	for i := range newMessages {
+		var segmentMessage protobuf.SegmentMessage
+		proto.Unmarshal(newMessages[i].Payload, &segmentMessage)
+
+		s.logger.Debug("segmentMessage =====",
+			zap.String("EntireMessageHash", types.HexBytes(segmentMessage.EntireMessageHash).String()),
+			zap.Uint32("Index", segmentMessage.Index),
+			zap.Uint32("SegmentsCount", segmentMessage.SegmentsCount),
+			zap.Uint32("ParitySegmentIndex", segmentMessage.ParitySegmentIndex),
+			zap.Uint32("ParitySegmentsCount", segmentMessage.ParitySegmentsCount))
+	}
 	return newMessages, err
 }
 
