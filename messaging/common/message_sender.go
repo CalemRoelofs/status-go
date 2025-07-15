@@ -956,6 +956,7 @@ func (s *MessageSender) handleMessage(receivedMsg *messagingtypes.ReceivedMessag
 		}
 
 		// Not a critical error; message wasn't segmented, proceed with next layers.
+		hlogger.Error("failed to handle segmentation layer message", zap.Error(err))
 	}
 
 	err = s.handleEncryptionLayer(context.Background(), message)
