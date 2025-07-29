@@ -2075,7 +2075,7 @@ func (m *Messenger) sendChatMessage(ctx context.Context, message *common.Message
 			syncMessageType = peersyncing.SyncMessagePrivateGroup
 		}
 
-		wrappedMessage, err := v1protocol.WrapMessageV1(rawMessage.Payload, rawMessage.MessageType, rawMessage.Sender, nil)
+		wrappedMessage, err := v1protocol.WrapMessageV1(rawMessage.Payload, rawMessage.MessageType, rawMessage.Sender)
 		if err != nil {
 			return errors.Wrap(err, "failed to wrap message")
 		}
@@ -3197,6 +3197,7 @@ func (m *Messenger) handleRetrievedMessages(chatWithMessages map[messagingtypes.
 				senderID := contactIDFromPublicKey(publicKey)
 				ownID := contactIDFromPublicKey(m.IdentityPublicKey())
 				logger.Info("processing message", zap.Any("type", msg.ApplicationLayer.Type), zap.String("senderID", senderID))
+				logger.Info("processing message app payload", zap.String("payload", types.EncodeHex(msg.ApplicationLayer.Payload)))
 
 				if senderID == ownID {
 					// Skip own messages of certain types
