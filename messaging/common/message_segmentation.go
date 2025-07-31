@@ -149,7 +149,6 @@ func (s *MessageSender) handleSegmentationLayer(message *types.Message) error {
 	segmentMessage := &types.SegmentMessage{
 		SegmentMessage: &protobuf.SegmentMessage{},
 	}
-
 	err := proto.Unmarshal(message.TransportLayer.Payload, segmentMessage.SegmentMessage)
 	if err != nil {
 		return errors.Wrap(err, "failed to unmarshal SegmentMessage")
