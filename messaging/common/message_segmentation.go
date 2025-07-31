@@ -33,19 +33,7 @@ func (s *MessageSender) segmentMessage(newMessage *wakutypes.NewMessage) ([]*wak
 	// We set the max message size to 3/4 of the allowed message size, to leave
 	// room for segment message metadata.
 	newMessages, err := segmentMessage(newMessage, int(s.transport.MaxMessageSize()/4*3))
-	s.logger.Debug("segmenting message ---===== payload", zap.String("Payload", types.Bytes2Hex(newMessage.Payload)))
 	s.logger.Debug("message segmented", zap.Int("segments", len(newMessages)))
-	for i := range newMessages {
-		var segmentMessage protobuf.SegmentMessage
-		proto.Unmarshal(newMessages[i].Payload, &segmentMessage)
-
-		s.logger.Debug("segmentMessage =====",
-			zap.String("EntireMessageHash", types.HexBytes(segmentMessage.EntireMessageHash).String()),
-			zap.Uint32("Index", segmentMessage.Index),
-			zap.Uint32("SegmentsCount", segmentMessage.SegmentsCount),
-			zap.Uint32("ParitySegmentIndex", segmentMessage.ParitySegmentIndex),
-			zap.Uint32("ParitySegmentsCount", segmentMessage.ParitySegmentsCount))
-	}
 	return newMessages, err
 }
 
@@ -162,8 +150,6 @@ func (s *MessageSender) handleSegmentationLayer(message *types.Message) error {
 		SegmentMessage: &protobuf.SegmentMessage{},
 	}
 
-	logger.Debug("unmarshalling SegmentMessage from payload",
-		zap.Int("PayloadSize", len(message.TransportLayer.Payload)), zap.String("Payload", types.Bytes2Hex(message.TransportLayer.Payload)))
 	err := proto.Unmarshal(message.TransportLayer.Payload, segmentMessage.SegmentMessage)
 	if err != nil {
 		return errors.Wrap(err, "failed to unmarshal SegmentMessage")

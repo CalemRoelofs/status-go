@@ -68,8 +68,7 @@ type MessageSender struct {
 	// handleSharedSecrets is a callback that is called every time a new shared secret is negotiated
 	handleSharedSecrets func([]*sharedsecret.Secret) error
 
-	reliabilityManager       *sds.ReliabilityManager
-	reliabilityManagersMutex sync.Mutex
+	reliabilityManager *sds.ReliabilityManager
 }
 
 func NewMessageSender(
@@ -87,6 +86,17 @@ func NewMessageSender(
 	callbacks := sds.EventCallbacks{
 		OnMessageSent: func(messageId sds.MessageID, channelId string) {
 			logger.Debug("SDS: message sent", zap.String("messageId", string(messageId)), zap.String("channelId", channelId))
+		},
+		OnMissingDependencies: func(messageId sds.MessageID, missingDeps []sds.MessageID, channelId string) {
+			logger.Debug("SDS: missing dependencies",
+				zap.String("messageId", string(messageId)),
+				zap.String("channelId", channelId),
+				zap.Any("missingDeps", missingDeps))
+		},
+		OnMessageReady: func(messageId sds.MessageID, channelId string) {
+			logger.Debug("SDS: message ready",
+				zap.String("messageId", string(messageId)),
+				zap.String("channelId", channelId))
 		},
 	}
 	reliabilityManager.RegisterCallbacks(callbacks)
@@ -704,8 +714,8 @@ func (s *MessageSender) SendPublic(
 		rawMessage.Sender = s.identity
 	}
 
-	var err error
 	var wrappedMessage []byte
+	var err error
 	if rawMessage.SkipApplicationWrap {
 		wrappedMessage = rawMessage.Payload
 	} else {
@@ -723,9 +733,6 @@ func (s *MessageSender) SendPublic(
 		return nil, errors.Wrap(err, "failed to wrap a public message in the encryption layer")
 	}
 
-	s.logger.Debug("raw message info", zap.Bool("skipEncryptionLayer", rawMessage.SkipEncryptionLayer),
-		zap.Int("hashRatchetGroupID", len(rawMessage.HashRatchetGroupID)),
-		zap.Bool("skipApplicationWrap", rawMessage.SkipApplicationWrap))
 	if len(rawMessage.HashRatchetGroupID) != 0 {
 
 		var ratchet *encryption.HashRatchetKeyCompatibility
@@ -789,9 +796,6 @@ func (s *MessageSender) SendPublic(
 		}
 	}
 
-	s.logger.Debug("segment params",
-		zap.Int("messageSize", len(newMessage.Payload)),
-		zap.Uint32("maxMessageSize", s.messaging.MaxMessageSize()), zap.String("messageId", messageID.String()))
 	newMessages, err := s.segmentMessage(newMessage)
 	if err != nil {
 		return nil, err
@@ -803,7 +807,6 @@ func (s *MessageSender) SendPublic(
 		if err != nil {
 			return nil, err
 		}
-		s.logger.Debug("sending public message", zap.Int("messageSize", len(newMessage.Payload)), zap.String("hash", types.EncodeHex(hash)))
 		hashes = append(hashes, hash)
 	}
 
@@ -978,16 +981,12 @@ func (s *MessageSender) handleMessage(receivedMsg *messagingtypes.ReceivedMessag
 		hlogger.Error("failed to handle segmentation layer message", zap.Error(err))
 	}
 
-	hlogger.Debug("app payload before sds", zap.String("appPayload", types.EncodeHex(message.TransportLayer.Payload)))
 	err = s.unwrapPayloadForSDS(message)
 	if err != nil {
 		hlogger.Error("failed to unwrap payload for SDS", zap.Error(err))
 	}
-	hlogger.Debug("app payload after sds", zap.String("appPayload", types.EncodeHex(message.TransportLayer.Payload)))
 
 	err = s.handleEncryptionLayer(context.Background(), message)
-	hlogger.Debug("handle encryption layer", zap.Int("messageSize", len(message.EncryptionLayer.Payload)),
-		zap.Int("messagesizetransport", len(message.TransportLayer.Payload)))
 	if err != nil {
 		hlogger.Debug("failed to handle an encryption message", zap.Error(err))
 
@@ -1369,7 +1368,6 @@ func (s *MessageSender) wrapPayloadForSDS(message *wakutypes.NewMessage, communi
 		zap.String("channelId", types.EncodeHex(communityID)),
 		zap.Int("payload-length", len(message.Payload)),
 		zap.String("messageId", types.EncodeHex(sdsMessageID)),
-		zap.String("original payload", types.EncodeHex(message.Payload)),
 	)
 	sdsWrappedPayload, err := s.reliabilityManager.WrapOutgoingMessage(message.Payload, sds.MessageID(types.EncodeHex(sdsMessageID)), types.EncodeHex(communityID))
 	if err != nil {
@@ -1378,19 +1376,11 @@ func (s *MessageSender) wrapPayloadForSDS(message *wakutypes.NewMessage, communi
 
 	message.Payload = sdsWrappedPayload
 
-	s.logger.Debug("SDS: wrapped payload",
-		zap.String("channelId", types.EncodeHex(communityID)),
-		zap.Int("payload-length", len(sdsWrappedPayload)),
-		zap.String("messageId", types.EncodeHex(sdsMessageID)),
-		zap.String("sdspayload", types.EncodeHex(sdsWrappedPayload)),
-	)
-
 	return sdsWrappedPayload, nil
 }
 
 func (s *MessageSender) unwrapPayloadForSDS(msg *v1protocol.StatusMessage) error {
 	if len(msg.TransportLayer.Payload) > 0 {
-		s.logger.Debug("SDS: unwrap payload", zap.String("beforeunwrappayload", types.EncodeHex(msg.TransportLayer.Payload)))
 		unwrappedMessage, err := s.reliabilityManager.UnwrapReceivedMessage(msg.TransportLayer.Payload)
 		if err != nil {
 			s.logger.Error("SDS: failed to unwrap received message", zap.Error(err))
@@ -1398,7 +1388,6 @@ func (s *MessageSender) unwrapPayloadForSDS(msg *v1protocol.StatusMessage) error
 			msg.TransportLayer.Payload = *unwrappedMessage.Message
 			s.logger.Debug("SDS: missing deps",
 				zap.Any("missing-deps", *unwrappedMessage.MissingDeps),
-				zap.String("unwrapped-payload", types.EncodeHex(msg.TransportLayer.Payload)),
 			)
 		}
 	}
