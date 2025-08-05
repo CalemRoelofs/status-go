@@ -79,6 +79,7 @@ func NewMessageSender(
 	enc *encryption.Protocol,
 	logger *zap.Logger,
 ) (*MessageSender, error) {
+	sds.SetLogger(logger)
 	reliabilityManager, err := sds.NewReliabilityManager()
 	if err != nil {
 		return nil, errors.Wrap(err, "SDS: failed to create reliability manager")
