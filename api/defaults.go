@@ -40,7 +40,7 @@ const (
 var (
 	paths = []string{accscommon.PathWalletRoot, accscommon.PathEIP1581Root, accscommon.PathEIP1581Chat, accscommon.PathDefaultWalletAccount, accscommon.PathEIP1581Encryption}
 
-	DefaultFleet = params.FleetStatusProd
+	DefaultFleet = params.FleetStatusStaging
 
 	overrideApiConfig = overrideApiConfigProd
 )
