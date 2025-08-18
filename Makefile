@@ -187,7 +187,7 @@ status-go-deps:
 
 
 statusgo-library: generate
-statusgo-library: $(LIBWAKU) ##@cross-compile Build status-go as static library for current platform
+statusgo-library: $(LIBWAKU) $(LIBSDS) ##@cross-compile Build status-go as static library for current platform
 	## cmd/library/README.md explains the magic incantation behind this
 	mkdir -p build/bin/statusgo-lib
 	go run cmd/library/*.go > build/bin/statusgo-lib/main.go
