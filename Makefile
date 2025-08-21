@@ -142,7 +142,7 @@ nix-purge: ##@nix Completely remove Nix setup, including /nix directory
 all: $(GO_CMD_NAMES)
 
 .PHONY: $(GO_CMD_NAMES) $(GO_CMD_PATHS) $(GO_CMD_BUILDS)
-$(GO_CMD_BUILDS): generate
+$(GO_CMD_BUILDS): generate-sds generate
 $(GO_CMD_BUILDS): ##@build Build any Go project from cmd folder
 	go build -mod=vendor -v \
 		-tags '$(BUILD_TAGS)' $(BUILD_FLAGS) \
@@ -168,7 +168,7 @@ status-backend: ##@build Build status-backend to run status-go as HTTP server
 status-backend: build/bin/status-backend
 
 run-status-backend: PORT ?= 0
-run-status-backend: generate
+run-status-backend: generate-sds generate
 run-status-backend: ##@run Start status-backend server listening to localhost:PORT
 	go run ./cmd/status-backend --address localhost:${PORT}
 
@@ -184,9 +184,24 @@ status-go-deps:
 	go clean -modcache || true
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
 
+statusgo-android: generate-sds-android generate
+statusgo-android: ##@cross-compile Build status-go for Android
+	@echo "Building status-go for Android..."
+	mkdir -p build/bin \
+	export GO111MODULE=on; \
+	export GOFLAGS="-mod=mod"; \
+	gomobile init; \
+	gomobile bind -v \
+		-target=android -ldflags="-s -w -checklinkname=0" \
+		-tags '$(BUILD_TAGS) disable_torrent' \
+		$(BUILD_FLAGS_MOBILE) \
+		--androidapi="23" \
+		-o build/bin/statusgo.aar \
+		github.com/status-im/status-go/mobile
+	@echo "Android cross compilation done in build/bin/statusgo.aar"
 
 
-statusgo-library: generate
+statusgo-library: generate-sds generate
 statusgo-library: $(LIBWAKU) $(LIBSDS) ##@cross-compile Build status-go as static library for current platform
 	## cmd/library/README.md explains the magic incantation behind this
 	mkdir -p build/bin/statusgo-lib
@@ -205,7 +220,7 @@ build-libwaku: $(LIBWAKU)
 
 build-libsds: $(LIBSDS)
 
-statusgo-shared-library: generate
+statusgo-shared-library: generate-sds generate
 statusgo-shared-library: $(LIBWAKU) $(LIBSDS) ##@cross-compile Build status-go as shared library for current platform
 	## cmd/library/README.md explains the magic incantation behind this
 	mkdir -p build/bin/statusgo-lib
@@ -251,12 +266,18 @@ setup-dev: ##@setup Install all necessary tools for development
 setup-dev:
 	echo "Replaced by Nix shell. Use 'make shell' or just any target as-is."
 
+generate-sds:  ##@ Build libsds third_party
+	cd vendor/github.com/waku-org/sds-go-bindings/sds/ && make build
+
+generate-sds-android:  ##@ Build libsds third_party for Android
+	cd vendor/github.com/waku-org/sds-go-bindings/sds/ && make build-android
+
 generate: PACKAGES ?= $$(go list -e ./... | grep -v "/contracts/")
 generate: GO_GENERATE_CMD ?= $$(which go-generate-fast || echo 'go generate')
 generate: export GO_GENERATE_FAST_DEBUG ?= false
 generate: export GO_GENERATE_FAST_RECACHE ?= false
 generate:  ##@ Run generate for all given packages using go-generate-fast, fallback to `go generate` (e.g. for docker)
-	@GOROOT=$$(go env GOROOT) $(GO_GENERATE_CMD) $(PACKAGES)
+	@GOOS=$$(go env GOHOSTOS) GOARCH=$$(go env GOHOSTARCH) GOROOT=$$(go env GOROOT) $(GO_GENERATE_CMD) $(PACKAGES)
 
 generate-contracts:
 	go generate ./contracts
@@ -308,7 +329,7 @@ rebuild-libsds: | clean-libsds $(LIBSDS)
 
 test: test-unit ##@tests Run basic, short tests during development
 
-test-unit-prep: generate
+test-unit-prep: generate-sds generate
 test-unit-prep: export BUILD_TAGS ?=
 test-unit-prep: export UNIT_TEST_DRY_RUN ?= false
 test-unit-prep: export UNIT_TEST_COUNT ?= 1
@@ -336,7 +357,7 @@ test-unit-network: ##@tests Run unit and integration tests with network access
 test-unit-race: export GOTEST_EXTRAFLAGS=-race
 test-unit-race: test-unit ##@tests Run unit and integration tests with -race flag
 
-test-functional: generate
+test-functional: generate-sds generate
 test-functional: export FUNCTIONAL_TESTS_DOCKER_UID ?= $(call sh, id -u)
 test-functional: export FUNCTIONAL_TESTS_REPORT_CODECOV ?= false
 test-functional:
@@ -347,10 +368,10 @@ benchmark:
 	@./_assets/scripts/run_benchmark.sh
 
 lint-panics: export GOFLAGS ?= -tags='$(BUILD_TAGS)'
-lint-panics: generate
+lint-panics: generate-sds generate
 	go run ./cmd/lint-panics -root="$(PWD)" -skip=./cmd -test=false ./...
 
-lint: generate lint-panics
+lint: generate-sds generate lint-panics
 	golangci-lint --build-tags '$(BUILD_TAGS)' run ./...
 
 clean: ##@other Cleanup
