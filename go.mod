@@ -95,7 +95,7 @@ require (
 	github.com/schollz/peerdiscovery v1.7.0
 	github.com/status-im/extkeys v1.2.0
 	github.com/waku-org/go-waku v0.8.1-0.20250411145637-900b98812a91
-	github.com/waku-org/sds-go-bindings v0.0.0-20250825204154-0b8dddea2275
+	github.com/waku-org/sds-go-bindings v0.0.0-20250911123411-f55a9f532e2d
 	github.com/waku-org/waku-go-bindings v0.0.0-20250714110306-6feba5b0df4d
 	github.com/wk8/go-ordered-map/v2 v2.1.7
 	github.com/yeqown/go-qrcode/v2 v2.2.1
