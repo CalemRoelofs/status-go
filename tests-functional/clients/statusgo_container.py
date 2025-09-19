@@ -416,7 +416,7 @@ class StatusBackendContainer(StatusGoContainer):
 
         super().__init__(entrypoint, ports, privileged, container_name_suffix=f"-status-backend-{host_port}")
 
-        bridge_network = kwargs.get("bridge_network", False)
+        bridge_network = kwargs.get("bridge_network", True)
         if bridge_network:
             self.connect_to_bridge_network()
 
