@@ -433,7 +433,7 @@ func (s *TransactorSuite) TestSendTransactionWithSignature() {
 			} else {
 				s.NoError(err)
 
-				_, err = s.manager.SendTransactionWithSignature(common.Address(args.From), args.Symbol, tx)
+				_, err = s.manager.SendTransactionWithSignature(&args, tx)
 				if scenario.expectError {
 					s.Error(err)
 				} else {
@@ -454,6 +454,6 @@ func (s *TransactorSuite) TestStoreAndTrackPendingTx() {
 	s.Nil(s.manager.pendingTracker)
 
 	// Empty tracker doesn't produce error
-	err := s.manager.StoreAndTrackPendingTx(common.Address{}, "", 0, nil)
+	err := s.manager.StoreAndTrackPendingTx(&wallettypes.SendTxArgs{}, nil)
 	s.NoError(err)
 }
