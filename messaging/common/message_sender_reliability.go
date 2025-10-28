@@ -1,14 +1,12 @@
 package common
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/status-im/status-go/crypto"
 	cryptotypes "github.com/status-im/status-go/crypto/types"
 	messagingtypes "github.com/status-im/status-go/messaging/types"
 )
@@ -16,57 +14,15 @@ import (
 var errReliabilityNotStarted = errors.New("reliability not started")
 
 func (s *MessageSender) StartReliability() error {
-	dispatcher := func(publicKey *ecdsa.PublicKey, wrappedPayload []byte, messages [][]byte) error {
-		messageIDs := make([]cryptotypes.HexBytes, 0, len(messages))
-		for _, msgPayload := range messages {
-			messageIDs = append(messageIDs, messagingtypes.MessageID(&s.identity.PublicKey, msgPayload))
-		}
-
-		err := s.sendPrivateEncryptedMessage(context.Background(), s.identity, publicKey, wrappedPayload, messageIDs)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	return s.reliability.Start(dispatcher)
+	return s.csender.Start()
 }
 
 func (s *MessageSender) StopReliability() {
-	s.reliability.Stop()
+	s.csender.Stop()
 }
 
 func (s *MessageSender) ReportUserOnline(publicKey *ecdsa.PublicKey, eventTime uint64) {
 	s.reliability.ReportPeerOnline(publicKey, eventTime)
-}
-
-func (s *MessageSender) sendWithReliability(recipient *ecdsa.PublicKey, messageID cryptotypes.HexBytes, message []byte) error {
-	if !s.reliability.Started() {
-		return errReliabilityNotStarted
-	}
-
-	// No need to call transport tracking.
-	// It is done in a data sync dispatch step.
-	datasyncID, err := s.reliability.WrapAndQueueMessageForDispatch(recipient, message)
-	if err != nil {
-		return err
-	}
-	// We don't need to receive confirmations from our own devices
-	if !crypto.IsPubKeyEqual(recipient, &s.identity.PublicKey) {
-		confirmation := &messagingtypes.RawMessageConfirmation{
-			DataSyncID: datasyncID[:],
-			MessageID:  messageID,
-			PublicKey:  crypto.CompressPubkey(recipient),
-		}
-
-		err = s.persistence.InsertPendingConfirmation(confirmation)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // handleReliabilityLayer tries to unwrap message as datasync one and in case of success
@@ -96,7 +52,7 @@ func (s *MessageSender) handleReliabilityLayer(m *messagingtypes.Message) ([]*me
 
 	ackedMessageIDs := make([]cryptotypes.HexBytes, 0, len(datasyncMessage.Acks))
 	for _, ack := range datasyncMessage.Acks {
-		messageIDBytes, err := s.markAsConfirmed(ack, true)
+		messageIDBytes, err := s.persistence.MarkAsConfirmed(ack, true)
 		if err != nil {
 			s.logger.Info("got datasync acknowledge for message we don't have in db", zap.String("ack", hex.EncodeToString(ack)))
 			continue

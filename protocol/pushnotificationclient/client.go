@@ -993,7 +993,7 @@ func (c *Client) handlePublicMessageSent(sentMessage *messagingevents.SentMessag
 // dispatch a push notification messages might be batched, if coming
 // from datasync for example.
 func (c *Client) handleDirectMessageSent(sentMessage *messagingevents.SentMessage) error {
-	c.config.Logger.Debug("handling direct messages", zap.Any("messageIDs", sentMessage.MessageIDs))
+	c.config.Logger.Debug("handling direct messages", zap.Strings("messageIDs", types.EncodeHexes(sentMessage.MessageIDs)))
 
 	publicKey := sentMessage.PublicKey
 
@@ -1012,7 +1012,7 @@ func (c *Client) handleDirectMessageSent(sentMessage *messagingevents.SentMessag
 
 	// Nothing to do
 	if len(trackedMessageIDs) == 0 {
-		c.config.Logger.Debug("nothing to do for", zap.Any("messageIDs", sentMessage.MessageIDs))
+		c.config.Logger.Debug("nothing to do for", zap.Strings("messageIDs", types.EncodeHexes(sentMessage.MessageIDs)))
 		return nil
 	}
 

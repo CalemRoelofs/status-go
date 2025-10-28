@@ -158,7 +158,7 @@ func (a *API) SendPrivate(ctx context.Context, recipient *ecdsa.PublicKey, rawMe
 	return a.core.sender.SendPrivate(ctx, recipient, rawMessage)
 }
 
-func (a *API) SendGroup(ctx context.Context, recipients []*ecdsa.PublicKey, rawMessage types.RawMessage) ([]byte, error) {
+func (a *API) SendGroup(ctx context.Context, recipients []*ecdsa.PublicKey, rawMessage *types.RawMessage) ([]byte, error) {
 	return a.core.sender.SendGroup(ctx, recipients, rawMessage)
 }
 
@@ -184,10 +184,6 @@ func (a *API) GetCurrentKeyForGroup(groupID []byte) (*encryption.HashRatchetKeyC
 
 func (a *API) SaveHashRatchetMessage(groupID []byte, keyID []byte, m *types.ReceivedMessage) error {
 	return a.core.sender.SaveHashRatchetMessage(groupID, keyID, m)
-}
-
-func (a *API) SendPubsubTopicKey(ctx context.Context, rawMessage *types.RawMessage) ([]byte, error) {
-	return a.core.sender.SendPubsubTopicKey(ctx, rawMessage)
 }
 
 func (a *API) SendPairInstallation(ctx context.Context, recipient *ecdsa.PublicKey, rawMessage types.RawMessage) ([]byte, error) {

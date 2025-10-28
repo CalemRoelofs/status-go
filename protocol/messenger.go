@@ -1828,7 +1828,7 @@ func (m *Messenger) dispatchMessage(ctx context.Context, rawMessage messagingtyp
 			rawMessage.MessageType = protobuf.ApplicationMetadataMessage_MEMBERSHIP_UPDATE_MESSAGE
 		}
 
-		id, err = m.messaging.SendGroup(ctx, rawMessage.Recipients, rawMessage)
+		id, err = m.messaging.SendGroup(ctx, rawMessage.Recipients, &rawMessage)
 		if err != nil {
 			return rawMessage, err
 		}

@@ -194,7 +194,7 @@ func (s *MessengerCommunitiesShardingSuite) TestIgnoreOutdatedShardKey() {
 			Payload:     encodedMessage,
 		}
 
-		_, err = s.owner.messaging.SendPubsubTopicKey(context.Background(), &rawMessage)
+		_, err = s.owner.messaging.SendGroup(context.Background(), rawMessage.Recipients, &rawMessage)
 		s.Require().NoError(err)
 
 		_, err = WaitOnMessengerResponse(s.alice, func(mr *MessengerResponse) bool {

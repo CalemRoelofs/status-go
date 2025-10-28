@@ -1,10 +1,8 @@
 package messaging
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"sync"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -155,24 +153,10 @@ func (c *Core) start() error {
 		}
 	}
 
-	err = c.sender.StartReliability()
+	err = c.sender.Start()
 	if err != nil {
 		return err
 	}
-
-	subscriptions, err := c.encryptor.Start(c.identity)
-	if err != nil {
-		return err
-	}
-
-	// handle stored shared secrets
-	err = c.sender.HandleSharedSecrets(subscriptions.SharedSecrets)
-	if err != nil {
-		return err
-	}
-
-	c.startCleanupLoop("messageSegmentsCleanupLoop", c.sender.CleanupSegments)
-	c.startCleanupLoop("hashRatchetEncryptedMessagesCleanupLoop", c.sender.CleanupHashRatchetEncryptedMessages)
 
 	// Forward MessageEvent
 	go func() {
@@ -181,7 +165,7 @@ func (c *Core) start() error {
 		c.wg.Add(1)
 		defer c.wg.Done()
 
-		s, unsub := pubsub.Subscribe[events.MessageEvent](c.sender.Publisher(), 0)
+		s, unsub := pubsub.Subscribe[events.MessageEvent](c.sender.Publisher(), 100)
 		defer unsub()
 
 		for {
@@ -200,33 +184,13 @@ func (c *Core) start() error {
 func (c *Core) stop() error {
 	close(c.quit)
 
-	c.sender.Stop()
-
-	err := c.transport.Stop()
-	if err != nil {
-		return err
-	}
-
-	func() {
-		c.wg.Add(1)
-		defer c.wg.Done()
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		err := c.transport.ResetFilters(ctx)
-		if err != nil {
-			c.logger.Warn("could not reset filters", zap.Error(err))
-		}
-	}()
-
-	err = c.encryptor.Stop()
+	err := c.sender.Stop()
 	if err != nil {
 		return err
 	}
 
 	if c.metricsEnabled {
-		err = wakumetrics.UnregisterMetrics()
+		err := wakumetrics.UnregisterMetrics()
 		if err != nil {
 			return err
 		}
@@ -255,35 +219,6 @@ func (c *Core) connectionChanged(state connection.State) {
 			c.logger.Error("failed to start datasync", zap.Error(err))
 		}
 	}
-}
-
-func (c *Core) startCleanupLoop(name string, cleanupFunc func() error) {
-	logger := c.logger.Named(name)
-
-	go func() {
-		defer gocommon.LogOnPanic()
-
-		c.wg.Add(1)
-		defer c.wg.Done()
-
-		// Delay by a few minutes to minimize messenger's startup time
-		var interval time.Duration = 5 * time.Minute
-		for {
-			select {
-			case <-time.After(interval):
-				// Set the regular interval after the first execution
-				interval = 1 * time.Hour
-
-				err := cleanupFunc()
-				if err != nil {
-					logger.Error("failed to cleanup", zap.Error(err))
-				}
-
-			case <-c.quit:
-				return
-			}
-		}
-	}()
 }
 
 type wakuParams struct {

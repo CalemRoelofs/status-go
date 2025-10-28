@@ -3684,7 +3684,7 @@ func (s *MessengerCommunitiesSuite) TestHandleImport() {
 	}
 	encodedPayload, err := proto.Marshal(&testMessage)
 	s.Require().NoError(err)
-	wrappedPayload, err := v1protocol.WrapMessageV1(
+	wrappedPayload, err := v1protocol.WrapIntoAppLayerMessage(
 		encodedPayload,
 		protobuf.ApplicationMetadataMessage_CHAT_MESSAGE,
 		s.owner.identity,

@@ -142,11 +142,8 @@ func (m *Messenger) publishOrg(org *communities.Community, shouldRekey bool) err
 	}
 	if org.Encrypted() {
 		members := org.GetMemberPubkeys()
-		if err != nil {
-			return err
-		}
-		rawMessage.CommunityKeyExMsgType = messagingtypes.KeyExMsgRekey
-		// This should be the one that it was used to encrypt this community
+		// Ensure encryption keys are attached to CommunityDescription to avoid timing issues
+		rawMessage.CommunityKeyExMsgType = messagingtypes.KeyExMsgReuse
 		rawMessage.HashRatchetGroupID = org.ID()
 		rawMessage.Recipients = members
 	}
@@ -3053,7 +3050,7 @@ func (m *Messenger) SendCommunityShardKey(community *communities.Community, pubk
 		Payload:     encodedMessage,
 	}
 
-	_, err = m.messaging.SendPubsubTopicKey(context.Background(), &rawMessage)
+	_, err = m.messaging.SendGroup(context.Background(), pubkeys, &rawMessage)
 
 	return err
 }
@@ -4264,7 +4261,7 @@ func (m *Messenger) pinMessagesToWakuMessages(pinMessages []*common.PinMessage, 
 		if err != nil {
 			return nil, err
 		}
-		wrappedPayload, err := v1protocol.WrapMessageV1(encodedPayload, protobuf.ApplicationMetadataMessage_PIN_MESSAGE, c.PrivateKey())
+		wrappedPayload, err := v1protocol.WrapIntoAppLayerMessage(encodedPayload, protobuf.ApplicationMetadataMessage_PIN_MESSAGE, c.PrivateKey())
 		if err != nil {
 			return nil, err
 		}
@@ -4298,7 +4295,7 @@ func (m *Messenger) chatMessagesToWakuMessages(chatMessages []*common.Message, c
 			return nil, err
 		}
 
-		wrappedPayload, err := v1protocol.WrapMessageV1(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, c.PrivateKey())
+		wrappedPayload, err := v1protocol.WrapIntoAppLayerMessage(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, c.PrivateKey())
 		if err != nil {
 			return nil, err
 		}

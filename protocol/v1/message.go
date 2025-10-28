@@ -30,8 +30,8 @@ func MessageID(author *ecdsa.PublicKey, data []byte) types.HexBytes {
 	return types.HexBytes(crypto.Keccak256(append(keyBytes, data...)))
 }
 
-// WrapMessageV1 wraps a payload into a protobuf message and signs it if an identity is provided
-func WrapMessageV1(payload []byte, messageType protobuf.ApplicationMetadataMessage_Type, identity *ecdsa.PrivateKey) ([]byte, error) {
+// WrapIntoAppLayerMessage wraps a payload into a protobuf message and signs it if an identity is provided
+func WrapIntoAppLayerMessage(payload []byte, messageType protobuf.ApplicationMetadataMessage_Type, identity *ecdsa.PrivateKey) ([]byte, error) {
 	var signature []byte
 	if identity != nil {
 		var err error

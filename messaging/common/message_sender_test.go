@@ -137,7 +137,7 @@ func (s *MessageSenderSuite) TestHandleDecodedMessagesWrapped() {
 	encodedPayload, err := proto.Marshal(&s.testMessage)
 	s.Require().NoError(err)
 
-	wrappedPayload, err := v1protocol.WrapMessageV1(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, authorKey)
+	wrappedPayload, err := v1protocol.WrapIntoAppLayerMessage(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, authorKey)
 	s.Require().NoError(err)
 
 	message := &messagingtypes.ReceivedMessage{}
@@ -150,7 +150,7 @@ func (s *MessageSenderSuite) TestHandleDecodedMessagesWrapped() {
 
 	s.Require().Equal(1, len(decodedMessages))
 	s.Require().Equal(&authorKey.PublicKey, decodedMessages[0].SigPubKey())
-	s.Require().Equal(v1protocol.MessageID(&authorKey.PublicKey, wrappedPayload), decodedMessages[0].ApplicationLayer.ID)
+	s.Require().Equal(messagingtypes.MessageID(&authorKey.PublicKey, wrappedPayload), decodedMessages[0].ApplicationLayer.ID)
 	s.Require().Equal(encodedPayload, decodedMessages[0].ApplicationLayer.Payload)
 	s.Require().Equal(protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, decodedMessages[0].ApplicationLayer.Type)
 }
@@ -165,7 +165,7 @@ func (s *MessageSenderSuite) TestHandleDecodedMessagesDatasync() {
 	encodedPayload, err := proto.Marshal(&s.testMessage)
 	s.Require().NoError(err)
 
-	wrappedPayload, err := v1protocol.WrapMessageV1(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, authorKey)
+	wrappedPayload, err := v1protocol.WrapIntoAppLayerMessage(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, authorKey)
 	s.Require().NoError(err)
 
 	dataSyncMessage := mvdsproto.Payload{
@@ -189,7 +189,7 @@ func (s *MessageSenderSuite) TestHandleDecodedMessagesDatasync() {
 	// We send two messages, the unwrapped one will be attributed to the relayer, while the wrapped one will be attributed to the author
 	s.Require().Equal(1, len(decodedMessages))
 	s.Require().Equal(&authorKey.PublicKey, decodedMessages[0].SigPubKey())
-	s.Require().Equal(v1protocol.MessageID(&authorKey.PublicKey, wrappedPayload), decodedMessages[0].ApplicationLayer.ID)
+	s.Require().Equal(messagingtypes.MessageID(&authorKey.PublicKey, wrappedPayload), decodedMessages[0].ApplicationLayer.ID)
 	s.Require().Equal(encodedPayload, decodedMessages[0].ApplicationLayer.Payload)
 	s.Require().Equal(protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, decodedMessages[0].ApplicationLayer.Type)
 }
@@ -204,7 +204,7 @@ func (s *MessageSenderSuite) TestHandleDecodedMessagesDatasyncEncrypted() {
 	encodedPayload, err := proto.Marshal(&s.testMessage)
 	s.Require().NoError(err)
 
-	wrappedPayload, err := v1protocol.WrapMessageV1(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, authorKey)
+	wrappedPayload, err := v1protocol.WrapIntoAppLayerMessage(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, authorKey)
 	s.Require().NoError(err)
 
 	dataSyncMessage := mvdsproto.Payload{
@@ -255,7 +255,7 @@ func (s *MessageSenderSuite) TestHandleDecodedMessagesDatasyncEncrypted() {
 	// while the wrapped one will be attributed to the author.
 	s.Require().Equal(1, len(decodedMessages))
 	s.Require().Equal(&authorKey.PublicKey, decodedMessages[0].SigPubKey())
-	s.Require().Equal(v1protocol.MessageID(&authorKey.PublicKey, wrappedPayload), decodedMessages[0].ApplicationLayer.ID)
+	s.Require().Equal(messagingtypes.MessageID(&authorKey.PublicKey, wrappedPayload), decodedMessages[0].ApplicationLayer.ID)
 	s.Require().Equal(encodedPayload, decodedMessages[0].ApplicationLayer.Payload)
 	s.Require().Equal(protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, decodedMessages[0].ApplicationLayer.Type)
 }
@@ -294,7 +294,7 @@ func (s *MessageSenderSuite) TestHandleOutOfOrderHashRatchet() {
 	encryptedPayload1, err := proto.Marshal(hashRatchetKeyExchangeMessage.Message)
 	s.Require().NoError(err)
 
-	wrappedPayload2, err := v1protocol.WrapMessageV1(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, senderKey)
+	wrappedPayload2, err := v1protocol.WrapIntoAppLayerMessage(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, senderKey)
 	s.Require().NoError(err)
 
 	messageSpec2, err := senderEncryptionProtocol.BuildHashRatchetMessage(
@@ -352,7 +352,7 @@ func (s *MessageSenderSuite) TestHandleSegmentMessages() {
 	encodedPayload, err := proto.Marshal(&s.testMessage)
 	s.Require().NoError(err)
 
-	wrappedPayload, err := v1protocol.WrapMessageV1(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, authorKey)
+	wrappedPayload, err := v1protocol.WrapIntoAppLayerMessage(encodedPayload, protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, authorKey)
 	s.Require().NoError(err)
 
 	segmentedMessages, err := s.sender.segmentMessageWithSize(&wakutypes.NewMessage{Payload: wrappedPayload}, int(math.Ceil(float64(len(wrappedPayload))/2)))
@@ -376,7 +376,7 @@ func (s *MessageSenderSuite) TestHandleSegmentMessages() {
 	decodedMessages := response.StatusMessages
 	s.Require().Len(decodedMessages, 1)
 	s.Require().Equal(&authorKey.PublicKey, decodedMessages[0].SigPubKey())
-	s.Require().Equal(v1protocol.MessageID(&authorKey.PublicKey, wrappedPayload), decodedMessages[0].ApplicationLayer.ID)
+	s.Require().Equal(messagingtypes.MessageID(&authorKey.PublicKey, wrappedPayload), decodedMessages[0].ApplicationLayer.ID)
 	s.Require().Equal(encodedPayload, decodedMessages[0].ApplicationLayer.Payload)
 	s.Require().Equal(protobuf.ApplicationMetadataMessage_CHAT_MESSAGE, decodedMessages[0].ApplicationLayer.Type)
 

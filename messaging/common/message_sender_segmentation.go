@@ -74,7 +74,7 @@ func (s *MessageSender) handleSegmentationLayer(message *types.Message) (segment
 	return
 }
 
-func (s *MessageSender) CleanupSegments() error {
+func (s *MessageSender) cleanupSegments() error {
 	monthAgo := time.Now().AddDate(0, -1, 0)
 	return s.segmenter.CleanupStaleSegments(monthAgo)
 }
