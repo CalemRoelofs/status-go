@@ -3578,7 +3578,7 @@ func (s *MessengerCommunitiesSuite) TestCommunityBanUserRequestToJoin() {
 
 	messageState.CurrentMessageState.PublicKey = &s.alice.identity.PublicKey
 
-	statusMessage := messagingtypes.Message{}
+	statusMessage := common.StatusMessage{}
 	statusMessage.TransportLayer.Dst = community.PublicKey()
 	err = s.owner.HandleCommunityRequestToJoin(messageState, requestToJoinProto, &statusMessage)
 
@@ -3950,7 +3950,7 @@ func (s *MessengerCommunitiesSuite) TestRequestAndCancelCommunityAdminOffline() 
 
 	messageState.CurrentMessageState.PublicKey = &s.alice.identity.PublicKey
 
-	statusMessage := messagingtypes.Message{}
+	statusMessage := common.StatusMessage{}
 	statusMessage.TransportLayer.Dst = community.PublicKey()
 
 	requestToJoinProto := &protobuf.CommunityRequestToJoin{

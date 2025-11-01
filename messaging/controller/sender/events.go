@@ -1,4 +1,4 @@
-package controllers
+package sender
 
 import (
 	"crypto/ecdsa"

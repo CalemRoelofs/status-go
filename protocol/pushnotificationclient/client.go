@@ -184,6 +184,7 @@ type Client struct {
 	reader io.Reader
 
 	messaging *messaging.API
+	sender    *common.MessageSender
 
 	// registrationLoopQuitChan is a channel to indicate to the registration loop that should be terminating
 	registrationLoopQuitChan chan struct{}
@@ -202,11 +203,12 @@ type Client struct {
 	pendingRegistrations map[string]bool
 }
 
-func New(persistence *Persistence, config *Config, messaging *messaging.API, messagePersistence MessagePersistence) *Client {
+func New(persistence *Persistence, config *Config, messaging *messaging.API, sender *common.MessageSender, messagePersistence MessagePersistence) *Client {
 	return &Client{
 		quit:                 make(chan struct{}),
 		config:               config,
 		messaging:            messaging,
+		sender:               sender,
 		messagePersistence:   messagePersistence,
 		persistence:          persistence,
 		pendingRegistrations: make(map[string]bool),
@@ -708,26 +710,32 @@ func (c *Client) subscribeForMessageEvents() {
 	go func() {
 		defer gocommon.LogOnPanic()
 		c.config.Logger.Debug("subscribing for message events")
-		messageEventsSub, unsubMessageEvents := pubsub.Subscribe[messagingevents.MessageEvent](c.messaging.Publisher(), 100)
-		defer unsubMessageEvents()
+
+		scheduledMessagesSub, unsubScheduledMessages := pubsub.Subscribe[common.ScheduledMessageEvent](c.sender.Publisher(), 100)
+		defer unsubScheduledMessages()
+
+		sentMessagesSub, unsubSentMessages := pubsub.Subscribe[messagingevents.SentMessage](c.messaging.Publisher(), 100)
+		defer unsubSentMessages()
+
 		for {
 			select {
-			case m, more := <-messageEventsSub:
+			case m, more := <-scheduledMessagesSub:
 				if !more {
 					c.config.Logger.Debug("no more message events, quitting")
+					continue
+				}
+				c.config.Logger.Debug("handling message scheduled")
+				if err := c.handleMessageScheduled(&m); err != nil {
+					c.config.Logger.Error("failed to handle message", zap.Error(err))
+				}
+			case m, more := <-sentMessagesSub:
+				if !more {
+					c.config.Logger.Debug("no more sent message events, quitting")
 					return
 				}
-				switch m.Type {
-				case messagingevents.MessageScheduled:
-					c.config.Logger.Debug("handling message scheduled")
-					if err := c.handleMessageScheduled(&m); err != nil {
-						c.config.Logger.Error("failed to handle message", zap.Error(err))
-					}
-				case messagingevents.MessageSent:
-					c.config.Logger.Debug("handling message sent")
-					if err := c.handleMessageSent(&m); err != nil {
-						c.config.Logger.Error("failed to handle message", zap.Error(err))
-					}
+				c.config.Logger.Debug("handling message sent")
+				if err := c.handleMessageSent(&m); err != nil {
+					c.config.Logger.Error("failed to handle message", zap.Error(err))
 				}
 			case <-c.quit:
 				return
@@ -835,23 +843,16 @@ func (c *Client) queryNotificationInfo(publicKey *ecdsa.PublicKey, force bool) e
 }
 
 // handleMessageSent is called every time a message is sent
-func (c *Client) handleMessageSent(e *messagingevents.MessageEvent) error {
-
-	sentMessage := e.SentMessage
+func (c *Client) handleMessageSent(e *messagingevents.SentMessage) error {
 	// Ignore if we are not sending notifications
 	if !c.config.SendEnabled {
 		return nil
 	}
 
-	// check if it's for one of our devices, do nothing in that case
-	if e.Recipient != nil && crypto.IsPubKeyEqual(e.Recipient, &c.config.Identity.PublicKey) {
-		return nil
+	if e.PublicKey == nil {
+		return c.handlePublicMessageSent(e)
 	}
-
-	if sentMessage.PublicKey == nil {
-		return c.handlePublicMessageSent(sentMessage)
-	}
-	return c.handleDirectMessageSent(sentMessage)
+	return c.handleDirectMessageSent(e)
 }
 
 // saving to the database might happen after we fetch the message, so we retry
@@ -1018,7 +1019,7 @@ func (c *Client) handleDirectMessageSent(sentMessage *messagingevents.SentMessag
 
 	// sendToAllDevices indicates whether the message has been sent using public key encryption only
 	// i.e not through the double ratchet. In that case, any device will have received it.
-	sendToAllDevices := len(sentMessage.Spec.Installations) == 0
+	sendToAllDevices := len(sentMessage.Installations) == 0
 
 	var installationIDs []string
 
@@ -1026,7 +1027,7 @@ func (c *Client) handleDirectMessageSent(sentMessage *messagingevents.SentMessag
 
 	// Check if we should be notifiying those installations
 	for _, messageID := range trackedMessageIDs {
-		for _, installation := range sentMessage.Spec.Installations {
+		for _, installation := range sentMessage.Installations {
 			installationID := installation.ID
 			shouldNotify, err := c.shouldNotifyOn(publicKey, installationID, messageID)
 			if err != nil {
@@ -1088,7 +1089,7 @@ func (c *Client) handleDirectMessageSent(sentMessage *messagingevents.SentMessag
 }
 
 // handleMessageScheduled keeps track of the message to make sure we notify on it
-func (c *Client) handleMessageScheduled(e *messagingevents.MessageEvent) error {
+func (c *Client) handleMessageScheduled(e *common.ScheduledMessageEvent) error {
 	message := e.RawMessage
 	if !message.SendPushNotification {
 		return nil
@@ -1338,7 +1339,7 @@ func (c *Client) registerWithServer(registration *protobuf.PushNotificationRegis
 	if err != nil {
 		return err
 	}
-	rawMessage := messagingtypes.RawMessage{
+	rawMessage := common.RawMessage{
 		Payload:     encryptedRegistration,
 		MessageType: protobuf.ApplicationMetadataMessage_PUSH_NOTIFICATION_REGISTRATION,
 		// We send on personal topic to avoid a lot of traffic on the partitioned topic
@@ -1346,7 +1347,7 @@ func (c *Client) registerWithServer(registration *protobuf.PushNotificationRegis
 		SkipEncryptionLayer: true,
 	}
 
-	_, err = c.messaging.SendPrivate(context.Background(), server.PublicKey, &rawMessage)
+	_, err = c.sender.SendPrivate(context.Background(), server.PublicKey, &rawMessage)
 
 	if err != nil {
 		return err
@@ -1441,7 +1442,7 @@ func (c *Client) SendNotification(publicKey *ecdsa.PublicKey, installationIDs []
 			return nil, err
 		}
 
-		rawMessage := messagingtypes.RawMessage{
+		rawMessage := common.RawMessage{
 			Payload: payload,
 			Sender:  ephemeralKey,
 			// we skip encryption as we don't want to save any key material
@@ -1450,7 +1451,7 @@ func (c *Client) SendNotification(publicKey *ecdsa.PublicKey, installationIDs []
 			MessageType:         protobuf.ApplicationMetadataMessage_PUSH_NOTIFICATION_REQUEST,
 		}
 
-		_, err = c.messaging.SendPrivate(context.Background(), serverPublicKey, &rawMessage)
+		_, err = c.sender.SendPrivate(context.Background(), serverPublicKey, &rawMessage)
 
 		if err != nil {
 			return nil, err
@@ -1722,7 +1723,7 @@ func (c *Client) queryPushNotificationInfo(publicKey *ecdsa.PublicKey) error {
 		return err
 	}
 
-	rawMessage := messagingtypes.RawMessage{
+	rawMessage := common.RawMessage{
 		Payload: encodedMessage,
 		Sender:  ephemeralKey,
 		// we don't want to wrap in an encryption layer message
@@ -1733,7 +1734,7 @@ func (c *Client) queryPushNotificationInfo(publicKey *ecdsa.PublicKey) error {
 
 	// this is the topic of message
 	encodedPublicKey := hex.EncodeToString(hashedPublicKey)
-	messageID, err := c.messaging.SendPublic(context.Background(), encodedPublicKey, rawMessage)
+	messageID, err := c.sender.SendPublic(context.Background(), encodedPublicKey, rawMessage)
 
 	if err != nil {
 		return err

@@ -1,4 +1,4 @@
-package controllers
+package sender
 
 import (
 	"context"
@@ -12,32 +12,14 @@ import (
 	"github.com/status-im/status-go/crypto"
 	cryptotypes "github.com/status-im/status-go/crypto/types"
 	"github.com/status-im/status-go/messaging/layers/encryption"
+	"github.com/status-im/status-go/messaging/types"
 	messagingtypes "github.com/status-im/status-go/messaging/types"
 	wakutypes "github.com/status-im/status-go/messaging/waku/types"
 	"github.com/status-im/status-go/pkg/pubsub"
 )
 
-type SendPublicParams struct {
-	Sender              *ecdsa.PublicKey
-	Payload             []byte
-	PubsubTopic         string
-	ContentTopic        string
-	SkipEncryptionLayer bool
-	Ephemeral           bool
-	Priority            *messagingtypes.MessagePriority
-	HashRatchet         *HashRatchetParams
-	CommunityPublicKey  *ecdsa.PublicKey
-}
-
-type HashRatchetParams struct {
-	Encrypt   bool
-	GroupID   []byte
-	KeyExType messagingtypes.CommKeyExMsgType
-	Members   []*ecdsa.PublicKey
-}
-
-func (s *Sender) SendPublic(ctx context.Context, params SendPublicParams) error {
-	messageID := messageID(params.Sender, params.Payload)
+func (s *Sender) SendPublic(ctx context.Context, params types.SendPublicParams) error {
+	messageID := types.MessageID(params.Sender, params.Payload)
 
 	logger := s.logger.Named("sendPublic").With(
 		zap.Stringer("messageID", messageID),
@@ -61,7 +43,7 @@ func (s *Sender) SendPublic(ctx context.Context, params SendPublicParams) error 
 	if params.HashRatchet != nil {
 		if params.HashRatchet.Encrypt {
 			logger.Debug("building hash ratchet message")
-			spec, err = s.encryption.BuildHashRatchetMessage(params.HashRatchet.GroupID, params.Payload)
+			spec, err = s.stack.Encryption.BuildHashRatchetMessage(params.HashRatchet.GroupID, params.Payload)
 			if err != nil {
 				return err
 			}
@@ -71,7 +53,7 @@ func (s *Sender) SendPublic(ctx context.Context, params SendPublicParams) error 
 		if params.HashRatchet.KeyExType != messagingtypes.KeyExMsgNone {
 			var ratchet *encryption.HashRatchetKeyCompatibility
 			if params.HashRatchet.KeyExType == messagingtypes.KeyExMsgReuse {
-				ratchet, err = s.encryption.GetCurrentKeyForGroup(params.HashRatchet.GroupID)
+				ratchet, err = s.stack.Encryption.GetCurrentKeyForGroup(params.HashRatchet.GroupID)
 				if err != nil {
 					return err
 				}
@@ -87,14 +69,14 @@ func (s *Sender) SendPublic(ctx context.Context, params SendPublicParams) error 
 
 			logger.Debug("building hash ratchet rekey message")
 
-			spec, err = s.encryption.BuildHashRatchetReKeyGroupMessage(s.identity, params.HashRatchet.Members, params.HashRatchet.GroupID, payload, ratchet)
+			spec, err = s.stack.Encryption.BuildHashRatchetReKeyGroupMessage(s.identity, params.HashRatchet.Members, params.HashRatchet.GroupID, payload, ratchet)
 			if err != nil {
 				return err
 			}
 		}
 	} else if !params.SkipEncryptionLayer {
 		logger.Debug("wrapping public message in encryption layer")
-		spec, err = s.encryption.BuildPublicMessage(s.identity, params.Payload)
+		spec, err = s.stack.Encryption.BuildPublicMessage(s.identity, params.Payload)
 		if err != nil {
 			return errors.Wrap(err, "failed to wrap a public message in the encryption layer")
 		}
@@ -112,6 +94,8 @@ func (s *Sender) SendPublic(ctx context.Context, params SendPublicParams) error 
 		payload:            payload,
 		pubsubTopic:        params.PubsubTopic,
 		contentTopic:       params.ContentTopic,
+		ephemeral:          params.Ephemeral,
+		priority:           params.Priority,
 		communityPublicKey: params.CommunityPublicKey,
 	})
 	if err != nil {
@@ -122,7 +106,7 @@ func (s *Sender) SendPublic(ctx context.Context, params SendPublicParams) error 
 		zap.Strings("hashes", cryptotypes.EncodeHexes(hashes)),
 	)
 
-	s.transport.Track(messageID, hashes, wakuMessages)
+	s.stack.Transport.Track(messageID, hashes, wakuMessages)
 
 	if spec != nil {
 		pubsub.Publish(s.publisher, SentMessage{
@@ -165,10 +149,10 @@ func (s *Sender) sendPublic(ctx context.Context, logger *zap.Logger, params send
 		wakuMessages[i] = wakuMessage
 		if params.communityPublicKey != nil {
 			logger.Debug("sending community public message")
-			hash, err = s.transport.SendCommunityMessage(ctx, wakuMessage, params.communityPublicKey)
+			hash, err = s.stack.Transport.SendCommunityMessage(ctx, wakuMessage, params.communityPublicKey)
 		} else {
 			logger.Debug("sending public message")
-			hash, err = s.transport.SendPublic(ctx, wakuMessage, params.contentTopic)
+			hash, err = s.stack.Transport.SendPublic(ctx, wakuMessage, params.contentTopic)
 		}
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to send message")

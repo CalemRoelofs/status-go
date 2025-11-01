@@ -1,4 +1,4 @@
-package controllers
+package sender
 
 import (
 	"context"
@@ -11,24 +11,13 @@ import (
 	"github.com/status-im/status-go/crypto"
 	cryptotypes "github.com/status-im/status-go/crypto/types"
 	"github.com/status-im/status-go/messaging/layers/encryption"
+	"github.com/status-im/status-go/messaging/types"
 	wakutypes "github.com/status-im/status-go/messaging/waku/types"
 	"github.com/status-im/status-go/pkg/pubsub"
 )
 
-type SendPrivateParams struct {
-	Sender              *ecdsa.PrivateKey
-	Recipient           *ecdsa.PublicKey
-	Payload             []byte
-	PubsubTopic         string
-	WithReliability     bool
-	SendWithDH          bool
-	SkipEncryptionLayer bool
-	SendOnPersonalTopic bool
-	HashRatchetGroupID  []byte
-}
-
-func (s *Sender) SendPrivate(ctx context.Context, params SendPrivateParams) error {
-	messageID := messageID(&params.Sender.PublicKey, params.Payload)
+func (s *Sender) SendPrivate(ctx context.Context, params types.SendPrivateParams) error {
+	messageID := types.MessageID(&params.Sender.PublicKey, params.Payload)
 
 	logger := s.logger.Named("sendPrivate").With(
 		zap.Stringer("messageID", messageID),
@@ -96,7 +85,7 @@ func (s *Sender) SendPrivate(ctx context.Context, params SendPrivateParams) erro
 		zap.Strings("hashes", cryptotypes.EncodeHexes(hashes)),
 	)
 
-	s.transport.Track(messageID, hashes, wakuMessages)
+	s.stack.Transport.Track(messageID, hashes, wakuMessages)
 
 	if spec != nil {
 		pubsub.Publish(s.publisher, SentMessage{
@@ -113,7 +102,7 @@ func (s *Sender) SendPrivate(ctx context.Context, params SendPrivateParams) erro
 }
 
 func (s *Sender) SendPrivateHashRatchetKeys(ctx context.Context, recipients []*ecdsa.PublicKey, groupID []byte) error {
-	keyExMessageSpecs, err := s.encryption.GetKeyExMessageSpecs(groupID, s.identity, recipients, false)
+	keyExMessageSpecs, err := s.stack.Encryption.GetKeyExMessageSpecs(groupID, s.identity, recipients, false)
 	if err != nil {
 		return err
 	}
@@ -144,7 +133,7 @@ func (s *Sender) SendPrivateHashRatchetKeys(ctx context.Context, recipients []*e
 
 func (s *Sender) SendPrivateAdvertiseBundle(ctx context.Context, publicKey *ecdsa.PublicKey) error {
 	now := time.Now().Unix()
-	advertise, err := s.encryption.ShouldAdvertiseBundle(publicKey, now)
+	advertise, err := s.stack.Encryption.ShouldAdvertiseBundle(publicKey, now)
 	if err != nil {
 		return err
 	}
@@ -152,7 +141,7 @@ func (s *Sender) SendPrivateAdvertiseBundle(ctx context.Context, publicKey *ecds
 		return nil
 	}
 
-	spec, err := s.encryption.BuildBundleAdvertiseMessage(s.identity, publicKey)
+	spec, err := s.stack.Encryption.BuildBundleAdvertiseMessage(s.identity, publicKey)
 	if err != nil {
 		return err
 	}
@@ -175,7 +164,7 @@ func (s *Sender) SendPrivateAdvertiseBundle(ctx context.Context, publicKey *ecds
 		return err
 	}
 
-	s.encryption.ConfirmBundleAdvertisement(publicKey, now)
+	s.stack.Encryption.ConfirmBundleAdvertisement(publicKey, now)
 
 	return nil
 }
@@ -205,13 +194,13 @@ func (s *Sender) sendPrivate(ctx context.Context, logger *zap.Logger, params sen
 		wakuMessages[i] = wakuMessage
 		if params.sendOnPersonalTopic {
 			logger.Debug("sending on personal topic")
-			hash, err = s.transport.SendPrivateOnPersonalTopic(ctx, wakuMessage, params.recipient)
+			hash, err = s.stack.Transport.SendPrivateOnPersonalTopic(ctx, wakuMessage, params.recipient)
 		} else if params.sharedSecretKey != nil {
 			logger.Debug("sending on shared secret topic")
-			hash, err = s.transport.SendPrivateWithSharedSecret(ctx, wakuMessage, params.recipient, params.sharedSecretKey)
+			hash, err = s.stack.Transport.SendPrivateWithSharedSecret(ctx, wakuMessage, params.recipient, params.sharedSecretKey)
 		} else {
 			logger.Debug("sending on partitioned topic")
-			hash, err = s.transport.SendPrivateWithPartitioned(ctx, wakuMessage, params.recipient)
+			hash, err = s.stack.Transport.SendPrivateWithPartitioned(ctx, wakuMessage, params.recipient)
 		}
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to send message")
@@ -223,18 +212,18 @@ func (s *Sender) sendPrivate(ctx context.Context, logger *zap.Logger, params sen
 }
 
 func (s *Sender) buildEncryptedMessage(sender *ecdsa.PrivateKey, recipient *ecdsa.PublicKey, payload []byte) (*encryption.ProtocolMessageSpec, error) {
-	return s.encryption.BuildEncryptedMessage(sender, recipient, payload)
+	return s.stack.Encryption.BuildEncryptedMessage(sender, recipient, payload)
 }
 
 func (s *Sender) buildEncryptedMessageAttachHashRatchetKeys(sender *ecdsa.PrivateKey, recipient *ecdsa.PublicKey, payload []byte, groupID []byte) (*encryption.ProtocolMessageSpec, error) {
-	ratchets, err := s.encryption.GetKeysForGroup(groupID)
+	ratchets, err := s.stack.Encryption.GetKeysForGroup(groupID)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.encryption.BuildHashRatchetKeyExchangeMessageWithPayload(s.identity, recipient, groupID, ratchets, payload)
+	return s.stack.Encryption.BuildHashRatchetKeyExchangeMessageWithPayload(s.identity, recipient, groupID, ratchets, payload)
 }
 
 func (s *Sender) buildDHMessage(sender *ecdsa.PrivateKey, recipient *ecdsa.PublicKey, payload []byte) (*encryption.ProtocolMessageSpec, error) {
-	return s.encryption.BuildDHMessage(sender, recipient, payload)
+	return s.stack.Encryption.BuildDHMessage(sender, recipient, payload)
 }

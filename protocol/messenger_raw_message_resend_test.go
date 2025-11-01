@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	messagingtypes "github.com/status-im/status-go/messaging/types"
+	"github.com/status-im/status-go/protocol/common"
 	"github.com/status-im/status-go/protocol/communities"
 	"github.com/status-im/status-go/protocol/protobuf"
 	"github.com/status-im/status-go/protocol/tt"
@@ -163,13 +164,13 @@ func (s *MessengerRawMessageResendTest) TestInvalidRawMessageToWatchDoesNotProdu
 	s.Require().NoError(err)
 }
 
-func (s *MessengerRawMessageResendTest) GetRequestToJoinToControlNodeRawMessage(ids []string) *messagingtypes.RawMessage {
+func (s *MessengerRawMessageResendTest) GetRequestToJoinToControlNodeRawMessage(ids []string) *common.RawMessage {
 	for _, messageID := range ids {
 		rawMessage, err := s.bobMessenger.RawMessageByID(messageID)
 		s.Require().NoError(err)
 		s.Require().NotNil(rawMessage)
 
-		if rawMessage.ResendMethod == messagingtypes.ResendMethodSendCommunityMessage {
+		if rawMessage.ResendMethod == common.ResendMethodSendCommunityMessage {
 			return rawMessage
 		}
 	}

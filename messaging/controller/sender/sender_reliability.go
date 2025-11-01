@@ -1,4 +1,4 @@
-package controllers
+package sender
 
 import (
 	"context"
@@ -9,25 +9,18 @@ import (
 
 	"github.com/status-im/status-go/crypto"
 	cryptotypes "github.com/status-im/status-go/crypto/types"
+	"github.com/status-im/status-go/messaging/types"
 	"github.com/status-im/status-go/pkg/pubsub"
 )
 
 var errReliabilityNotStarted = errors.New("reliability not started")
 
-func (s *Sender) StartReliability() error {
-	return s.reliability.Start(s.sendPrivateReliability)
-}
-
-func (s *Sender) StopReliability() {
-	s.reliability.Stop()
-}
-
 func (s *Sender) scheduleReliableSend(recipient *ecdsa.PublicKey, message []byte) ([]byte, error) {
-	if !s.reliability.Started() {
+	if !s.stack.Reliability.Started() {
 		return nil, errReliabilityNotStarted
 	}
 
-	datasyncID, err := s.reliability.WrapAndQueueMessageForDispatch(recipient, message)
+	datasyncID, err := s.stack.Reliability.WrapAndQueueMessageForDispatch(recipient, message)
 	if err != nil {
 		return nil, err
 	}
@@ -35,10 +28,10 @@ func (s *Sender) scheduleReliableSend(recipient *ecdsa.PublicKey, message []byte
 	return datasyncID[:], nil
 }
 
-func (s *Sender) sendPrivateReliability(recipient *ecdsa.PublicKey, wrappedPayload []byte, messages [][]byte) error {
+func (s *Sender) SendPrivateReliability(recipient *ecdsa.PublicKey, wrappedPayload []byte, messages [][]byte) error {
 	messageIDs := make([]cryptotypes.HexBytes, 0, len(messages))
 	for _, msgPayload := range messages {
-		messageIDs = append(messageIDs, messageID(&s.identity.PublicKey, msgPayload))
+		messageIDs = append(messageIDs, types.MessageID(&s.identity.PublicKey, msgPayload))
 	}
 
 	logger := s.logger.Named("sendPrivateReliability").With(
@@ -74,7 +67,7 @@ func (s *Sender) sendPrivateReliability(recipient *ecdsa.PublicKey, wrappedPaylo
 		byteMessageIDs[i] = []byte(id)
 	}
 
-	s.transport.TrackMany(byteMessageIDs, hashes, wakuMessages)
+	s.stack.Transport.TrackMany(byteMessageIDs, hashes, wakuMessages)
 
 	pubsub.Publish(s.publisher, SentMessage{
 		Private:                true,
