@@ -1,4 +1,4 @@
-package protocol
+package linkpreview
 
 import (
 	"fmt"
@@ -9,22 +9,32 @@ import (
 	gocommon "github.com/status-im/status-go/common"
 	"github.com/status-im/status-go/images"
 	messagingtypes "github.com/status-im/status-go/messaging/types"
+	"github.com/status-im/status-go/protocol"
 	"github.com/status-im/status-go/protocol/common"
 	"github.com/status-im/status-go/protocol/communities"
 	"github.com/status-im/status-go/services/sharedurls"
+	"github.com/status-im/status-go/protocol/contacts"
 )
 
-type StatusUnfurler struct {
-	m      *Messenger
-	logger *zap.Logger
-	url    string
+//go:generate go tool mockgen -package=mock_status_data_provider -source=unfurler_status.go -destination=./mock/status_data_provider.go
+
+type StatusDataProvider interface {
+	GetContactByID(pubKey string) *contacts.Contact
+	FetchContact(contactID string, waitForResponse bool) (*contacts.Contact, error)
+	FetchCommunity(communityID string, shard *messagingtypes.Shard) (*communities.Community, error)
 }
 
-func NewStatusUnfurler(URL string, messenger *Messenger, logger *zap.Logger) *StatusUnfurler {
+type StatusUnfurler struct {
+	provider StatusDataProvider
+	logger   *zap.Logger
+	url      string
+}
+
+func NewStatusUnfurler(URL string, provider StatusDataProvider, logger *zap.Logger) *StatusUnfurler {
 	return &StatusUnfurler{
-		m:      messenger,
-		logger: logger.With(zap.String("url", URL)),
-		url:    URL,
+		provider: provider,
+		logger:   logger.With(zap.String("url", URL)),
+		url:      URL,
 	}
 }
 
@@ -57,11 +67,11 @@ func (u *StatusUnfurler) buildContactData(publicKey string) (*common.StatusConta
 		return nil, err
 	}
 
-	contact := u.m.GetContactByID(contactID)
+	contact := u.provider.GetContactByID(contactID)
 
 	// If no contact found locally, fetch it from waku
 	if contact == nil {
-		contact, err = u.m.FetchContact(contactID, true)
+		contact, err = u.provider.FetchContact(contactID, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to request contact info from mailserver for public key '%s': %w", gocommon.TruncateWithDot(publicKey), err)
 		}
@@ -87,13 +97,7 @@ func (u *StatusUnfurler) buildContactData(publicKey string) (*common.StatusConta
 
 func (u *StatusUnfurler) buildCommunityData(communityID string, shard *messagingtypes.Shard) (*communities.Community, *common.StatusCommunityLinkPreview, error) {
 	// This automatically checks the database
-	community, err := u.m.FetchCommunity(&FetchCommunityRequest{
-		CommunityKey:    communityID,
-		Shard:           shard,
-		TryDatabase:     true,
-		WaitForResponse: true,
-	})
-
+	community, err := u.provider.FetchCommunity(communityID, shard)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get community info for communityID '%s': %w", gocommon.TruncateWithDot(communityID), err)
 	}
