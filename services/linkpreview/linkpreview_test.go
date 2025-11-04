@@ -18,6 +18,7 @@ import (
 	"github.com/status-im/status-go/protocol/common"
 	"github.com/status-im/status-go/protocol/contacts"
 	"github.com/status-im/status-go/protocol/protobuf"
+	"github.com/status-im/status-go/services/sharedurls"
 )
 
 const (
@@ -33,12 +34,16 @@ func TestLinkPreviews(t *testing.T) {
 type LinkPreviewsTestSuite struct {
 	suite.Suite
 	logger *zap.Logger
+
+	statusDataProvider StatusDataProvider
 }
 
 func (s *LinkPreviewsTestSuite) SetupSuite() {
 	var err error
 	s.logger, err = zap.NewDevelopment()
 	s.Require().NoError(err)
+
+	s.Require()
 }
 
 // assertContainsLongString verifies if actual contains a slice of expected and
@@ -505,8 +510,11 @@ func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_StatusContactAdded() {
 	c.Images[images.SmallDimName] = icon
 	s.m.allContacts.Store(c.ID, c)
 
+	dataProvider
+
 	// Generate a shared URL
-	u, err := sharedurls s.m.ShareUserURLWithData(c.ID)
+	sharedUrlsService := sharedurls.NewService(dataProvider)
+	u, err := sharedUrlsService.ShareUserURLWithData(c.ID)
 	s.Require().NoError(err)
 
 	// Update contact info locally after creating the shared URL
@@ -515,7 +523,7 @@ func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_StatusContactAdded() {
 	c.DisplayName = "TestDisplayName_2"
 	s.m.allContacts.Store(c.ID, c)
 
-	r, err := s.m.UnfurlURLs(nil, []string{u})
+	r, err := UnfurlURLs([]string{u}, nil, dataProvider, s.logger)
 	s.Require().NoError(err)
 	s.Require().Len(r.StatusLinkPreviews, 1)
 	s.Require().Len(r.LinkPreviews, 0)

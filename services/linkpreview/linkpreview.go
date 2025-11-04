@@ -14,7 +14,6 @@ import (
 	"github.com/status-im/markdown"
 
 	"github.com/status-im/status-go/multiaccounts/settings"
-	"github.com/status-im/status-go/protocol"
 	"github.com/status-im/status-go/protocol/common"
 	"github.com/status-im/status-go/services/sharedurls"
 )
