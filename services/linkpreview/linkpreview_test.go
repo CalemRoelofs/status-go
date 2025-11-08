@@ -6,19 +6,21 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 
-	"github.com/status-im/status-go/crypto"
 	"github.com/status-im/status-go/images"
 	"github.com/status-im/status-go/multiaccounts/settings"
 	"github.com/status-im/status-go/protocol/common"
-	"github.com/status-im/status-go/protocol/contacts"
 	"github.com/status-im/status-go/protocol/protobuf"
+	"github.com/status-im/status-go/services/linkpreview/mock"
 	"github.com/status-im/status-go/services/sharedurls"
+	"github.com/status-im/status-go/t"
 )
 
 const (
@@ -35,7 +37,7 @@ type LinkPreviewsTestSuite struct {
 	suite.Suite
 	logger *zap.Logger
 
-	statusDataProvider StatusDataProvider
+	ctrl *gomock.Controller
 }
 
 func (s *LinkPreviewsTestSuite) SetupSuite() {
@@ -43,7 +45,7 @@ func (s *LinkPreviewsTestSuite) SetupSuite() {
 	s.logger, err = zap.NewDevelopment()
 	s.Require().NoError(err)
 
-	s.Require()
+	s.ctrl = gomock.NewController(s.T())
 }
 
 // assertContainsLongString verifies if actual contains a slice of expected and
@@ -488,12 +490,8 @@ func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_Image() {
 }
 
 func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_StatusContactAdded() {
-	identity, err := crypto.GenerateKey()
-	s.Require().NoError(err)
-
-	c, err := contacts.BuildContactFromPublicKey(&identity.PublicKey)
-	s.Require().NoError(err)
-	s.Require().NotNil(c)
+	publicKey := t.FakePublicKey(s.T())
+	c := t.FakeContact(s.T(), publicKey)
 
 	payload, err := images.GetPayloadFromURI(exampleIdenticonURI)
 	s.Require().NoError(err)
@@ -503,25 +501,24 @@ func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_StatusContactAdded() {
 		Height:  50,
 		Payload: payload,
 	}
-
-	c.Bio = "TestBio_1"
-	c.DisplayName = "TestDisplayName_1"
-	c.Images = map[string]images.IdentityImage{}
-	c.Images[images.SmallDimName] = icon
-	s.m.allContacts.Store(c.ID, c)
-
-	dataProvider
+	c.Images = map[string]images.IdentityImage{
+		images.SmallDimName: icon,
+	}
 
 	// Generate a shared URL
-	sharedUrlsService := sharedurls.NewService(dataProvider)
-	u, err := sharedUrlsService.ShareUserURLWithData(c.ID)
+	u, err := sharedurls.ShareUserURLWithData(c)
 	s.Require().NoError(err)
 
-	// Update contact info locally after creating the shared URL
+	// Provider a different contact with the same ID
 	// This is required to test that URL-decoded data is not used in the preview.
-	c.Bio = "TestBio_2"
-	c.DisplayName = "TestDisplayName_2"
-	s.m.allContacts.Store(c.ID, c)
+	// TODO: Also replace image
+	c2 := t.FakeContact(s.T(), publicKey)
+	c2.Images = map[string]images.IdentityImage{
+		images.SmallDimName: icon,
+	}
+
+	dataProvider := mock_linkpreview.NewMockStatusDataProvider(s.ctrl)
+	dataProvider.EXPECT().GetContactByID(gomock.Eq(c2.ID)).Return(c2).Times(1)
 
 	r, err := UnfurlURLs([]string{u}, nil, dataProvider, s.logger)
 	s.Require().NoError(err)
@@ -533,9 +530,9 @@ func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_StatusContactAdded() {
 	s.Require().Nil(preview.Community)
 	s.Require().Nil(preview.Channel)
 	s.Require().NotNil(preview.Contact)
-	s.Require().Equal(c.ID, preview.Contact.PublicKey)
-	s.Require().Equal(c.DisplayName, preview.Contact.DisplayName)
-	s.Require().Equal(c.Bio, preview.Contact.Description)
+	s.Require().Equal(c2.ID, preview.Contact.PublicKey)
+	s.Require().Equal(c2.DisplayName, preview.Contact.DisplayName)
+	s.Require().Equal(c2.Bio, preview.Contact.Description)
 	s.Require().Equal(icon.Width, preview.Contact.Icon.Width)
 	s.Require().Equal(icon.Height, preview.Contact.Icon.Height)
 	s.Require().Equal("", preview.Contact.Icon.URL)
@@ -545,247 +542,118 @@ func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_StatusContactAdded() {
 	s.Require().Equal(expectedDataURI, preview.Contact.Icon.DataURI)
 }
 
-//func (s *LinkPreviewsTestSuite) setProfileParameters(messenger *protocol.Messenger, displayName string, bio string, identityImages []images.IdentityImage) {
-//	const timeout = 1 * time.Second
-//
-//	changes := protocol.SelfContactChangeEvent{}
-//
-//	protocol.SetSettingsAndWaitForChange(&s.Suite, messenger, timeout, func() {
-//		err := messenger.SetDisplayName(displayName)
-//		s.Require().NoError(err)
-//		err = messenger.SetBio(bio)
-//		s.Require().NoError(err)
-//	}, func(event *protocol.SelfContactChangeEvent) bool {
-//		if event.DisplayNameChanged {
-//			changes.DisplayNameChanged = true
-//		}
-//		if event.BioChanged {
-//			changes.BioChanged = true
-//		}
-//		return changes.DisplayNameChanged && changes.BioChanged
-//	})
-//
-//	protocol.SetIdentityImagesAndWaitForChange(&s.Suite, messenger, timeout, func() {
-//		err := messenger.multiAccounts.StoreIdentityImages(messenger.account.KeyUID, identityImages, false)
-//		s.Require().NoError(err)
-//	})
-//
-//	selfContact := messenger.GetSelfContact()
-//	s.Require().Equal(selfContact.DisplayName, displayName)
-//	s.Require().Equal(selfContact.Bio, bio)
-//
-//	for _, image := range identityImages {
-//		saved, ok := selfContact.Images[image.Name]
-//		s.Require().True(ok)
-//		s.Require().Equal(saved, image)
-//	}
-//	s.Require().Equal(selfContact.DisplayName, displayName)
-//}
-//
-//func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_SelfLink() {
-//	profileKp, _, _, err := accounts.GetProfileKeypairForTest(true, false, false)
-//	s.Require().NoError(err)
-//	profileKp.KeyUID = s.m.account.KeyUID
-//	profileKp.Accounts[0].KeyUID = s.m.account.KeyUID
-//
-//	err = s.m.settings.SaveOrUpdateKeypair(profileKp)
-//	s.Require().NoError(err)
-//
-//	// Set initial profile parameters
-//	identityImages := images.SampleIdentityImages()
-//	s.setProfileParameters(s.m, "TestDisplayName_3", "TestBio_3", identityImages)
-//
-//	// Generate a shared URL
-//	u, err := s.m.ShareUserURLWithData(s.m.IdentityPublicKeyString())
-//	s.Require().NoError(err)
-//
-//	// Update contact info locally after creating the shared URL
-//	// This is required to test that URL-decoded data is not used in the preview.
-//	iconPayload, err := images.GetPayloadFromURI(exampleIdenticonURI)
-//	s.Require().NoError(err)
-//	icon := images.IdentityImage{
-//		Name:    images.SmallDimName,
-//		Width:   50,
-//		Height:  50,
-//		Payload: iconPayload,
-//	}
-//	s.setProfileParameters(s.m, "TestDisplayName_4", "TestBio_4", []images.IdentityImage{icon})
-//
-//	r, err := s.m.UnfurlURLs(nil, []string{u})
-//	s.Require().NoError(err)
-//	s.Require().Len(r.StatusLinkPreviews, 1)
-//	s.Require().Len(r.LinkPreviews, 0)
-//
-//	userSettings, err := s.m.getSettings()
-//	s.Require().NoError(err)
-//
-//	preview := r.StatusLinkPreviews[0]
-//	s.Require().Equal(u, preview.URL)
-//	s.Require().Nil(preview.Community)
-//	s.Require().Nil(preview.Channel)
-//	s.Require().NotNil(preview.Contact)
-//	s.Require().Equal(s.m.IdentityPublicKeyString(), preview.Contact.PublicKey)
-//	s.Require().Equal(userSettings.DisplayName, preview.Contact.DisplayName)
-//	s.Require().Equal(userSettings.Bio, preview.Contact.Description)
-//
-//	s.Require().Equal(icon.Width, preview.Contact.Icon.Width)
-//	s.Require().Equal(icon.Height, preview.Contact.Icon.Height)
-//	s.Require().Equal("", preview.Contact.Icon.URL)
-//
-//	expectedDataURI, err := images.GetPayloadDataURI(icon.Payload)
-//	s.Require().NoError(err)
-//	s.Require().Equal(expectedDataURI, preview.Contact.Icon.DataURI)
-//}
-//
-//func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_StatusCommunityJoined() {
-//
-//	description := &requests.CreateCommunity{
-//		Membership:  protobuf.CommunityPermissions_AUTO_ACCEPT,
-//		Name:        "status",
-//		Description: "status community description",
-//		Color:       "#123456",
-//		Image:       "../_assets/tests/status.png", // 256*256 px
-//		ImageAx:     0,
-//		ImageAy:     0,
-//		ImageBx:     256,
-//		ImageBy:     256,
-//		Banner: images.CroppedImage{
-//			ImagePath: "../_assets/tests/IMG_1205.HEIC.jpg", // 2282*3352 px
-//			X:         0,
-//			Y:         0,
-//			Width:     160,
-//			Height:    90,
-//		},
-//	}
-//
-//	response, err := s.m.CreateCommunity(description, false)
-//	s.Require().NoError(err)
-//	s.Require().NotNil(response)
-//
-//	community := response.Communities()[0]
-//	communityImages := community.Images()
-//	s.Require().Len(communityImages, 3)
-//
-//	// Get icon data
-//	icon, ok := communityImages[images.SmallDimName]
-//	s.Require().True(ok)
-//	iconWidth, iconHeight, err := images.GetImageDimensions(icon.Payload)
-//	s.Require().NoError(err)
-//	iconDataURI, err := images.GetPayloadDataURI(icon.Payload)
-//	s.Require().NoError(err)
-//
-//	// Get banner data
-//	banner, ok := communityImages[images.BannerIdentityName]
-//	s.Require().True(ok)
-//	bannerWidth, bannerHeight, err := images.GetImageDimensions(banner.Payload)
-//	s.Require().NoError(err)
-//	bannerDataURI, err := images.GetPayloadDataURI(banner.Payload)
-//	s.Require().NoError(err)
-//
-//	// Create shared URL
-//	u, err := s.m.ShareCommunityURLWithData(community.ID())
-//	s.Require().NoError(err)
-//
-//	// Unfurl community shared URL
-//	r, err := s.m.UnfurlURLs(nil, []string{u})
-//	s.Require().NoError(err)
-//	s.Require().Len(r.StatusLinkPreviews, 1)
-//	s.Require().Len(r.LinkPreviews, 0)
-//
-//	preview := r.StatusLinkPreviews[0]
-//	s.Require().Equal(u, preview.URL)
-//	s.Require().NotNil(preview.Community)
-//	s.Require().Nil(preview.Channel)
-//	s.Require().Nil(preview.Contact)
-//
-//	s.Require().Equal(community.IDString(), preview.Community.CommunityID)
-//	s.Require().Equal(community.Name(), preview.Community.DisplayName)
-//	s.Require().Equal(community.Identity().Description, preview.Community.Description)
-//	s.Require().Equal(iconWidth, preview.Community.Icon.Width)
-//	s.Require().Equal(iconHeight, preview.Community.Icon.Height)
-//	s.Require().Equal(iconDataURI, preview.Community.Icon.DataURI)
-//	s.Require().Equal(bannerWidth, preview.Community.Banner.Width)
-//	s.Require().Equal(bannerHeight, preview.Community.Banner.Height)
-//	s.Require().Equal(bannerDataURI, preview.Community.Banner.DataURI)
-//}
-//
-//func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_Settings() {
-//	// Create website stub
-//	const ogLink = "https://github.com"
-//	const statusUserLink = "https://status.app/c#zQ3shYSHp7GoiXaauJMnDcjwU2yNjdzpXLosAWapPS4CFxc11"
-//	const gifLink = "https://media1.giphy.com/media/lcG3qwtTKSNI2i5vst/giphy.gif"
-//
-//	linksToUnfurl := []string{ogLink, statusUserLink, gifLink}
-//	text := strings.Join(linksToUnfurl, " ")
-//
-//	// Test `AlwaysAsk`
-//
-//	err := s.m.settings.SaveSettingField(settings.URLUnfurlingMode, settings.URLUnfurlingAlwaysAsk)
-//	s.Require().NoError(err)
-//
-//	plan := s.m.GetTextURLsToUnfurl(text)
-//	s.Require().Len(plan.URLs, len(linksToUnfurl))
-//
-//	s.Require().Equal(plan.URLs[0].URL, ogLink)
-//	s.Require().Equal(plan.URLs[0].IsStatusSharedURL, false)
-//	s.Require().Equal(plan.URLs[0].Permission, URLUnfurlingAskUser)
-//
-//	s.Require().Equal(plan.URLs[1].URL, statusUserLink)
-//	s.Require().Equal(plan.URLs[1].IsStatusSharedURL, true)
-//	s.Require().Equal(plan.URLs[1].Permission, URLUnfurlingAllowed)
-//
-//	s.Require().Equal(plan.URLs[2].URL, gifLink)
-//	s.Require().Equal(plan.URLs[2].IsStatusSharedURL, false)
-//	s.Require().Equal(plan.URLs[2].Permission, URLUnfurlingNotSupported)
-//
-//	// Test `EnableAll`
-//	err = s.m.settings.SaveSettingField(settings.URLUnfurlingMode, settings.URLUnfurlingEnableAll)
-//	s.Require().NoError(err)
-//
-//	plan = s.m.GetTextURLsToUnfurl(text)
-//	s.Require().Len(plan.URLs, len(linksToUnfurl))
-//
-//	s.Require().Equal(plan.URLs[0].URL, ogLink)
-//	s.Require().Equal(plan.URLs[0].IsStatusSharedURL, false)
-//	s.Require().Equal(plan.URLs[0].Permission, URLUnfurlingAllowed)
-//
-//	s.Require().Equal(plan.URLs[1].URL, statusUserLink)
-//	s.Require().Equal(plan.URLs[1].IsStatusSharedURL, true)
-//	s.Require().Equal(plan.URLs[1].Permission, URLUnfurlingAllowed)
-//
-//	s.Require().Equal(plan.URLs[2].URL, gifLink)
-//	s.Require().Equal(plan.URLs[2].IsStatusSharedURL, false)
-//	s.Require().Equal(plan.URLs[2].Permission, URLUnfurlingNotSupported)
-//
-//	// Test `DisableAll`
-//	err = s.m.settings.SaveSettingField(settings.URLUnfurlingMode, settings.URLUnfurlingDisableAll)
-//	s.Require().NoError(err)
-//
-//	plan = s.m.GetTextURLsToUnfurl(text)
-//	s.Require().Len(plan.URLs, len(linksToUnfurl))
-//
-//	s.Require().Equal(plan.URLs[0].URL, ogLink)
-//	s.Require().Equal(plan.URLs[0].IsStatusSharedURL, false)
-//	s.Require().Equal(plan.URLs[0].Permission, URLUnfurlingForbiddenBySettings)
-//
-//	s.Require().Equal(plan.URLs[1].URL, statusUserLink)
-//	s.Require().Equal(plan.URLs[1].IsStatusSharedURL, true)
-//	s.Require().Equal(plan.URLs[1].Permission, URLUnfurlingAllowed)
-//
-//	s.Require().Equal(plan.URLs[2].URL, gifLink)
-//	s.Require().Equal(plan.URLs[2].IsStatusSharedURL, false)
-//	s.Require().Equal(plan.URLs[2].Permission, URLUnfurlingNotSupported)
-//}
-//
-//func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_Limit() {
-//	text := "https://www.youtube.com/watch?v=6dkDepLX0rk " +
-//		"https://www.youtube.com/watch?v=ferZnZ0_rSM " +
-//		"https://www.youtube.com/watch?v=bdneye4pzMw " +
-//		"https://www.youtube.com/watch?v=pRERgcQe-fQ " +
-//		"https://www.youtube.com/watch?v=j82L3pLjb_0 " +
-//		"https://www.youtube.com/watch?v=hxsJvKYyVyg " +
-//		"https://www.youtube.com/watch?v=jIIuzB11dsA "
-//
-//	urls := s.m.GetURLs(text)
-//	s.Require().Equal(UnfurledLinksPerMessageLimit, len(urls))
-//}
+func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_StatusCommunityJoined() {
+
+	community := t.FakeCommunity(s.T(),
+		t.WithCommunityImage("../../_assets/tests/status.png", 0, 0, 256, 256),        // 256*256 px
+		t.WithCommunityBanner("../../_assets/tests/IMG_1205.HEIC.jpg", 0, 0, 160, 90), // 2282*3352 px
+	)
+
+	communityImages := community.Images()
+	s.Require().Len(communityImages, 3)
+
+	// Get icon data
+	icon, ok := communityImages[images.SmallDimName]
+	s.Require().True(ok)
+	iconWidth, iconHeight, err := images.GetImageDimensions(icon.Payload)
+	s.Require().NoError(err)
+	iconDataURI, err := images.GetPayloadDataURI(icon.Payload)
+	s.Require().NoError(err)
+
+	// Get banner data
+	banner, ok := communityImages[images.BannerIdentityName]
+	s.Require().True(ok)
+	bannerWidth, bannerHeight, err := images.GetImageDimensions(banner.Payload)
+	s.Require().NoError(err)
+	bannerDataURI, err := images.GetPayloadDataURI(banner.Payload)
+	s.Require().NoError(err)
+
+	// Create shared URL
+	u, err := sharedurls.ShareCommunityURLWithData(community)
+	s.Require().NoError(err)
+
+	// Instantiate provider
+	dataProvider := mock_linkpreview.NewMockStatusDataProvider(s.ctrl)
+	dataProvider.EXPECT().FetchCommunity(gomock.Eq(community.IDString()), gomock.Eq(community.Shard())).
+		Return(community, nil).Times(1)
+
+	// Unfurl community shared URL
+	r, err := UnfurlURLs([]string{u}, nil, dataProvider, s.logger)
+	s.Require().NoError(err)
+	s.Require().Len(r.StatusLinkPreviews, 1)
+	s.Require().Len(r.LinkPreviews, 0)
+
+	preview := r.StatusLinkPreviews[0]
+	s.Require().Equal(u, preview.URL)
+	s.Require().NotNil(preview.Community)
+	s.Require().Nil(preview.Channel)
+	s.Require().Nil(preview.Contact)
+
+	s.Require().Equal(community.IDString(), preview.Community.CommunityID)
+	s.Require().Equal(community.Name(), preview.Community.DisplayName)
+	s.Require().Equal(community.Identity().Description, preview.Community.Description)
+	s.Require().Equal(iconWidth, preview.Community.Icon.Width)
+	s.Require().Equal(iconHeight, preview.Community.Icon.Height)
+	s.Require().Equal(iconDataURI, preview.Community.Icon.DataURI)
+	s.Require().Equal(bannerWidth, preview.Community.Banner.Width)
+	s.Require().Equal(bannerHeight, preview.Community.Banner.Height)
+	s.Require().Equal(bannerDataURI, preview.Community.Banner.DataURI)
+}
+
+func (s *LinkPreviewsTestSuite) Test_UnfurlURLs_Settings() {
+	// Create website stub
+	const ogLink = "https://github.com"
+	const statusUserLink = "https://status.app/c#zQ3shYSHp7GoiXaauJMnDcjwU2yNjdzpXLosAWapPS4CFxc11"
+	const gifLink = "https://media1.giphy.com/media/lcG3qwtTKSNI2i5vst/giphy.gif"
+
+	linksToUnfurl := []string{ogLink, statusUserLink, gifLink}
+	text := strings.Join(linksToUnfurl, " ")
+
+	// Test `AlwaysAsk`
+	plan := GetTextURLsToUnfurl(text, settings.URLUnfurlingAlwaysAsk)
+	s.Require().Len(plan.URLs, len(linksToUnfurl))
+
+	s.Require().Equal(plan.URLs[0].URL, ogLink)
+	s.Require().Equal(plan.URLs[0].IsStatusSharedURL, false)
+	s.Require().Equal(plan.URLs[0].Permission, URLUnfurlingAskUser)
+
+	s.Require().Equal(plan.URLs[1].URL, statusUserLink)
+	s.Require().Equal(plan.URLs[1].IsStatusSharedURL, true)
+	s.Require().Equal(plan.URLs[1].Permission, URLUnfurlingAllowed)
+
+	s.Require().Equal(plan.URLs[2].URL, gifLink)
+	s.Require().Equal(plan.URLs[2].IsStatusSharedURL, false)
+	s.Require().Equal(plan.URLs[2].Permission, URLUnfurlingNotSupported)
+
+	// Test `EnableAll`
+	plan = GetTextURLsToUnfurl(text, settings.URLUnfurlingEnableAll)
+	s.Require().Len(plan.URLs, len(linksToUnfurl))
+
+	s.Require().Equal(plan.URLs[0].URL, ogLink)
+	s.Require().Equal(plan.URLs[0].IsStatusSharedURL, false)
+	s.Require().Equal(plan.URLs[0].Permission, URLUnfurlingAllowed)
+
+	s.Require().Equal(plan.URLs[1].URL, statusUserLink)
+	s.Require().Equal(plan.URLs[1].IsStatusSharedURL, true)
+	s.Require().Equal(plan.URLs[1].Permission, URLUnfurlingAllowed)
+
+	s.Require().Equal(plan.URLs[2].URL, gifLink)
+	s.Require().Equal(plan.URLs[2].IsStatusSharedURL, false)
+	s.Require().Equal(plan.URLs[2].Permission, URLUnfurlingNotSupported)
+
+	// Test `DisableAll`
+	plan = GetTextURLsToUnfurl(text, settings.URLUnfurlingDisableAll)
+	s.Require().Len(plan.URLs, len(linksToUnfurl))
+
+	s.Require().Equal(plan.URLs[0].URL, ogLink)
+	s.Require().Equal(plan.URLs[0].IsStatusSharedURL, false)
+	s.Require().Equal(plan.URLs[0].Permission, URLUnfurlingForbiddenBySettings)
+
+	s.Require().Equal(plan.URLs[1].URL, statusUserLink)
+	s.Require().Equal(plan.URLs[1].IsStatusSharedURL, true)
+	s.Require().Equal(plan.URLs[1].Permission, URLUnfurlingAllowed)
+
+	s.Require().Equal(plan.URLs[2].URL, gifLink)
+	s.Require().Equal(plan.URLs[2].IsStatusSharedURL, false)
+	s.Require().Equal(plan.URLs[2].Permission, URLUnfurlingNotSupported)
+}

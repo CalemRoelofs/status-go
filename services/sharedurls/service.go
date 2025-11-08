@@ -464,7 +464,7 @@ func parseUserURLWithENS(ensName string) (*URLDataResponse, error) {
 	return nil, fmt.Errorf("not implemented yet")
 }
 
-func (s *Service) prepareEncodedUserData(contact *contacts.Contact) (string, string, error) {
+func prepareEncodedUserData(contact *contacts.Contact) (string, string, error) {
 	pk, err := contact.PublicKey()
 	if err != nil {
 		return "", "", err
@@ -514,8 +514,11 @@ func (s *Service) ShareUserURLWithData(contactID string) (string, error) {
 	if contact == nil {
 		return "", ErrContactNotFound
 	}
+	return ShareUserURLWithData(contact)
+}
 
-	data, shortKey, err := s.prepareEncodedUserData(contact)
+func ShareUserURLWithData(contact *contacts.Contact) (string, error) {
+	data, shortKey, err := prepareEncodedUserData(contact)
 	if err != nil {
 		return "", err
 	}

@@ -9,20 +9,10 @@ import (
 	gocommon "github.com/status-im/status-go/common"
 	"github.com/status-im/status-go/images"
 	messagingtypes "github.com/status-im/status-go/messaging/types"
-	"github.com/status-im/status-go/protocol"
 	"github.com/status-im/status-go/protocol/common"
 	"github.com/status-im/status-go/protocol/communities"
 	"github.com/status-im/status-go/services/sharedurls"
-	"github.com/status-im/status-go/protocol/contacts"
 )
-
-//go:generate go tool mockgen -package=mock_status_data_provider -source=unfurler_status.go -destination=./mock/status_data_provider.go
-
-type StatusDataProvider interface {
-	GetContactByID(pubKey string) *contacts.Contact
-	FetchContact(contactID string, waitForResponse bool) (*contacts.Contact, error)
-	FetchCommunity(communityID string, shard *messagingtypes.Shard) (*communities.Community, error)
-}
 
 type StatusUnfurler struct {
 	provider StatusDataProvider

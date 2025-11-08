@@ -18,34 +18,8 @@ import (
 	"github.com/status-im/status-go/services/sharedurls"
 )
 
-const UnfurledLinksPerMessageLimit = 5
-
-type URLUnfurlPermission int
-
-const (
-	URLUnfurlingAllowed URLUnfurlPermission = iota
-	URLUnfurlingAskUser
-	URLUnfurlingForbiddenBySettings
-	URLUnfurlingNotSupported
-)
-
-type URLUnfurlingMetadata struct {
-	URL               string              `json:"url"`
-	Permission        URLUnfurlPermission `json:"permission"`
-	IsStatusSharedURL bool                `json:"isStatusSharedURL"`
-}
-
-type URLsUnfurlPlan struct {
-	URLs []URLUnfurlingMetadata `json:"urls"`
-}
-
 func URLUnfurlingSupported(url string) bool {
 	return !strings.HasSuffix(url, ".gif")
-}
-
-type UnfurlURLsResponse struct {
-	LinkPreviews       []*common.LinkPreview       `json:"linkPreviews,omitempty"`
-	StatusLinkPreviews []*common.StatusLinkPreview `json:"statusLinkPreviews,omitempty"`
 }
 
 func normalizeHostname(hostname string) string {

@@ -7,9 +7,6 @@ import (
 	"github.com/status-im/status-go/multiaccounts/settings"
 )
 
-type Persistence interface {
-	GetUnfurlingMode() (settings.URLUnfurlingModeType, error)
-}
 
 type Service struct {
 	logger             *zap.Logger
